@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cardiac Agent</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=29">
+</head>
+
+<body>
+  <div class="app-container">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">🫀</div>
+        <div class="logo-text">
+          <h1>Cardiac Agent</h1>
+          <span>Intelligent Cardiac Imaging Analysis</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="status-indicator">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Checking connection...</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <h3>Task Type</h3>
+          <div class="task-selector">
+            <button class="task-btn active" data-task="auto">
+              <span class="icon">🤖</span>
+              <span>Agent Auto</span>
+            </button>
+            <button class="task-btn" data-task="rag">
+              <span class="icon">💬</span>
+              <span>Medical Info Retrieval</span>
+            </button>
+            <button class="task-btn" data-task="direct_chat">
+              <span class="icon">🖼️</span>
+              <span>Smart Chat (PNG)</span>
+            </button>
+            <button class="task-btn" data-task="agent_vqa">
+              <span class="icon">🔍</span>
+              <span>Agent VQA</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>Upload Files</h3>
+          <div class="upload-zone" id="uploadZone">
+            <input type="file" id="fileInput" multiple accept=".zip,.nii,.nii.gz,.gz,.png,.jpg,.jpeg,.gif,.webp">
+            <div class="upload-icon">📦</div>
+            <div><strong>Click to upload</strong> or drag files</div>
+            <p>Supports .zip (DCM), .nii.gz, .png, .jpg</p>
+          </div>
+          <div class="file-list" id="fileList"></div>
+          <button class="clear-all-btn" id="clearAllBtn" style="display: none;">Clear All Files</button>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>Task Description</h3>
+          <p id="taskDescription" style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+            Agent-Driven mode: Upload MRI files → Agent auto-identifies sequences → Smart frame extraction → Agent decides API → Expert model. Results downloadable with original filenames (seg labels, NIFTI, PDF reports).
+          </p>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>Session Management</h3>
+          <div class="session-info" id="sessionInfo">
+            Session ID: <span class="session-id" id="currentSessionId">Not created</span>
+          </div>
+          <div class="cache-actions">
+            <button class="cache-btn" onclick="createNewSession()">New Session</button>
+            <button class="cache-btn danger" onclick="clearCurrentSession()">Clear Cache</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- 图片预览模态框 -->
+      <div class="modal-overlay" id="imageModal" onclick="closeImageModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+          <button class="modal-close" onclick="closeImageModal()">×</button>
+          <img id="modalImage" src="" alt="Preview">
+          <div class="modal-info" id="modalInfo"></div>
+        </div>
+      </div>
+
+      <section class="chat-panel">
+        <div class="chat-header">
+          <h2>💬 Chat</h2>
+          <button class="quick-prompt" onclick="clearChat()">Clear Chat</button>
+        </div>
+        
+        <div class="processing-bar" id="processingBar">
+          <div class="progress"></div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+          <div class="message bot">
+            <div class="message-content">
+              Hello! I'm <strong>Cardiac Agent</strong>, your intelligent cardiac imaging analysis assistant.
+              <!-- <br><br> -->
+              <!-- 🚀 <strong>V22 Unified Agent-Driven Flow + Download Support</strong>: -->
+              <!-- <br>Upload cardiac MRI images → Agent identifies sequences → Smart frame extraction → Agent decides API → Expert model → <strong>Download results</strong> -->
+              <br><br>
+              I support all these tasks automatically:
+              <br>
+              🔹 <strong>Segmentation</strong> - 2CH/4CH/SA/LGE segmentation + download labels &amp; NIFTI
+              <br>
+              🔹 <strong>Disease Screening</strong> - Cardiomyopathy classification + download labels &amp; NIFTI
+              <br>
+              🔹 <strong>NICM Subclassification</strong> - Non-ischemic subtyping + download NIFTI
+              <br>
+              🔹 <strong>Medical Report</strong> - Cardiac metrics + download PDF report &amp; NIFTI
+              <br>
+              🔹 <strong>Medical Q&A</strong> - Cardiac knowledge retrieval
+              <br>
+              🔹 <strong>Smart Chat</strong> - PNG/JPG image analysis
+              <br><br>
+              📦 <strong>File Format</strong>: 
+              <br>• DCM folder → .zip &nbsp;|&nbsp; Medical images → .nii.gz &nbsp;|&nbsp; Images → .png, .jpg
+              <br><br>
+              📥 <strong>Downloads</strong>: Segmentation labels (.nii.gz), original volumes (.nii.gz), PDF reports
+              <br><br>
+              Just upload files and describe what you need!
+            </div>
+            <div class="message-meta">
+              <span>Cardiac Agent</span>
+              <span>•</span>
+              <span id="welcomeTime"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-input-area">
+          <div class="input-wrapper">
+            <textarea class="input-field" id="messageInput" placeholder="Enter your question..." rows="1"></textarea>
+            <button class="send-btn" id="sendBtn" disabled>➤</button>
+          </div>
+          <div class="quick-prompts">
+            <button class="quick-prompt" data-prompt="Please segment the cardiac structures in this MRI image">Segmentation</button>
+            <button class="quick-prompt" data-prompt="Please classify the cardiomyopathy in these images">Disease Screening</button>
+            <button class="quick-prompt" data-prompt="Please generate a cardiac function evaluation report">Report Generation</button>
+            <button class="quick-prompt" data-prompt="Please identify the sequence type of this image">Sequence ID</button>
+            <button class="quick-prompt" data-prompt="What is dilated cardiomyopathy?">Medical QA</button>
+            <button class="quick-prompt" data-prompt="Please describe what you see in these images">Describe Images</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js?v=29"></script>
+</body>
+
+</html>
