@@ -3,7 +3,7 @@ const API_BASE_URL = 'http://localhost:8005';
 
 // 状态
 let selectedFiles = [];
-let selectedTask = 'auto';
+let selectedTask = 'mr';
 let isProcessing = false;
 let currentSessionId = null;
 
@@ -20,12 +20,11 @@ const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
 const taskDescription = document.getElementById('taskDescription');
 
-// Task descriptions
 const taskDescriptions = {
-  auto: 'Agent-Driven mode: Upload cardiac MRI files (.zip/.nii.gz) → Agent identifies sequences → Smart frame extraction → Agent decides API → Expert model → Download results (seg labels, NIFTI, PDF reports).',
-  rag: 'Medical Info Retrieval can answer cardiac medical questions without uploading image files.',
-  direct_chat: 'Smart Chat mode for PNG/JPG images. The Agent will analyze the images and determine if specialized APIs are needed.',
-  agent_vqa: 'Agent VQA mode: Upload images and ask questions directly. Agent answers without calling any expert models.'
+  mr: 'Cardiac MR mode: Upload cardiac MRI files (.zip/.nii.gz) → Agent identifies sequences → Smart frame extraction → Agent decides API → Expert model → Download results (seg labels, NIFTI, PDF reports).',
+  ct: 'Cardiac CT mode: Coming soon.',
+  us: 'Cardiac Ultrasound mode: Coming soon.',
+  ecg: 'ECG analysis mode: Coming soon.',
 };
 
 // 初始化
@@ -40,7 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // 设置事件监听
 function setupEventListeners() {
   // 任务选择
-  document.querySelectorAll('.task-btn').forEach(btn => {
+  document.querySelectorAll('.task-btn:not(.disabled)').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.task-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -227,11 +226,7 @@ async function sendMessage() {
       formData.append('session_id', currentSessionId);
     }
     
-    // 添加任务类型（如果不是自动模式）
-    // 后端会智能判断是否需要调用Worker（根据Agent响应中的API）
-    if (selectedTask !== 'auto') {
-      formData.append('task_type', selectedTask);
-    }
+    formData.append('task_type', selectedTask);
     
     // 添加文件
     currentFiles.forEach(file => {

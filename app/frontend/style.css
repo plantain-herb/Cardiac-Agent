@@ -188,16 +188,58 @@ header {
   gap: 10px;
 }
 
-.task-btn:hover {
+/* MR — cyan/teal */
+.task-btn[data-task="mr"]:hover {
   background: rgba(0, 200, 255, 0.1);
-  border-color: var(--primary);
+  border-color: #00c8ff;
+}
+.task-btn[data-task="mr"].active {
+  background: rgba(0, 200, 255, 0.15);
+  border-color: #00c8ff;
+  color: #00c8ff;
 }
 
-.task-btn.active {
-  background: rgba(0, 200, 255, 0.15);
-  border-color: var(--primary);
-  color: var(--primary);
+/* CT — amber/orange */
+.task-btn[data-task="ct"]:hover {
+  background: rgba(255, 165, 2, 0.1);
+  border-color: #ffa502;
 }
+.task-btn[data-task="ct"].active {
+  background: rgba(255, 165, 2, 0.15);
+  border-color: #ffa502;
+  color: #ffa502;
+}
+
+/* US — violet/purple */
+.task-btn[data-task="us"]:hover {
+  background: rgba(162, 120, 255, 0.1);
+  border-color: #a278ff;
+}
+.task-btn[data-task="us"].active {
+  background: rgba(162, 120, 255, 0.15);
+  border-color: #a278ff;
+  color: #a278ff;
+}
+
+/* ECG — green */
+.task-btn[data-task="ecg"]:hover {
+  background: rgba(46, 213, 115, 0.1);
+  border-color: #2ed573;
+}
+.task-btn[data-task="ecg"].active {
+  background: rgba(46, 213, 115, 0.15);
+  border-color: #2ed573;
+  color: #2ed573;
+}
+
+.task-btn.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.task-btn.disabled[data-task="ct"]  { color: #ffa502; }
+.task-btn.disabled[data-task="us"]  { color: #a278ff; }
+.task-btn.disabled[data-task="ecg"] { color: #2ed573; }
 
 .task-btn .icon {
   font-size: 18px;

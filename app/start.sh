@@ -21,7 +21,7 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # 路径统一来自 app/config.py（单一事实源）
 # 如果 Python 可用则动态读取，否则使用与 config.py 一致的默认值
-_py_cfg() { python3 -c "from app.config import $1; print($1)" 2>/dev/null; }
+_py_cfg() { (cd "${PROJECT_DIR}" && python3 -c "from app.config import $1; print($1)") 2>/dev/null; }
 LOG_DIR="$(_py_cfg LOG_DIR || echo "${PROJECT_DIR}/logs")"
 PID_DIR="$(_py_cfg PID_DIR || echo "${PROJECT_DIR}/pids")"
 FRONTEND_PID_DIR="$(_py_cfg FRONTEND_PID_DIR || echo "${PROJECT_DIR}/app/frontend/.pids")"
@@ -90,8 +90,8 @@ log_success() { echo -e "${BLUE}[SUCCESS]${NC} $1"; }
 print_banner() {
     echo ""
     echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║${NC}          ${GREEN}🫀 Cardiac Agent System${NC}                              ${BLUE}║${NC}"
-    echo -e "${BLUE}║${NC}  Unified Agent-Driven Cardiac Imaging Analysis               ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}                 ${GREEN}🫀 BAAI Cardiac Agent System${NC}                  ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}    ${GREEN}Unified Agent-Driven Cardiac Imaging Analysis by BAAI${NC}     ${BLUE}║${NC}"
     echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
@@ -114,7 +114,7 @@ activate_conda() {
 # ============ 启动各项服务 ============
 
 start_controller() {
-    log_info "启动 Controller (port ${PORT_CONTROLLER}, env: ${CONDA_ENV_AGENT})..."
+    log_info "启动 Controller | port: ${PORT_CONTROLLER} | env: ${CONDA_ENV_AGENT}"
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
@@ -127,12 +127,12 @@ start_controller() {
     " > "${LOG_DIR}/controller.log" 2>&1 &
 
     echo $! > "${PID_DIR}/controller.pid"
-    log_info "Controller 已启动 (PID: $!)"
+    log_success "Controller 已启动 | PID: $!"
     sleep 2
 }
 
 start_agent() {
-    log_info "启动 LLaVA Agent模型 (port ${PORT_AGENT}, GPU ${GPU_AGENT}, env: ${CONDA_ENV_AGENT})..."
+    log_info "启动 LLaVA Agent | port: ${PORT_AGENT} | GPU: ${GPU_AGENT} | env: ${CONDA_ENV_AGENT}"
     cd "${PROJECT_DIR}"
     export CUDA_LAUNCH_BLOCKING=1
 
@@ -150,7 +150,7 @@ start_agent() {
     " > "${LOG_DIR}/agent_model.log" 2>&1 &
 
     echo $! > "${PID_DIR}/agent_model.pid"
-    log_info "LLaVA Agent模型 已启动 (PID: $!, GPU: ${GPU_AGENT})"
+    log_success "LLaVA Agent 已启动 | PID: $! | GPU: ${GPU_AGENT}"
     sleep 30
 }
 
@@ -161,7 +161,7 @@ start_worker() {
     local gpu=${4:-0}
     local cuda_device=${5:-$gpu}
 
-    log_info "启动 ${name} Worker (port ${port}, CUDA ${cuda_device}, env: ${CONDA_ENV_EXPERT})..."
+    log_info "启动 ${name} | port: ${port} | GPU: ${cuda_device} | env: ${CONDA_ENV_EXPERT}"
     cd "${PROJECT_DIR}"
 
     CUDA_VISIBLE_DEVICES=${cuda_device} nohup bash -c "
@@ -177,7 +177,7 @@ start_worker() {
     " > "${LOG_DIR}/workers/${name}.log" 2>&1 &
 
     echo $! > "${PID_DIR}/${name}.pid"
-    log_info "${name} 已启动 (PID: $!, CUDA: ${cuda_device})"
+    log_success "${name} 已启动 | PID: $! | GPU: ${cuda_device}"
     sleep 30
 }
 
@@ -185,7 +185,7 @@ start_metrics_worker() {
     local name="metrics"
     local port=${PORT_METRICS}
 
-    log_info "启动 ${name} Worker (port ${port}, CPU only, env: ${CONDA_ENV_EXPERT})..."
+    log_info "启动 ${name} | port: ${port} | CPU | env: ${CONDA_ENV_EXPERT}"
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
@@ -202,7 +202,7 @@ start_metrics_worker() {
     " > "${LOG_DIR}/workers/${name}.log" 2>&1 &
 
     echo $! > "${PID_DIR}/${name}.pid"
-    log_info "${name} 已启动 (PID: $!, CPU only)"
+    log_success "${name} 已启动 | PID: $! | CPU"
     sleep 5
 }
 
@@ -210,7 +210,7 @@ start_mrg_worker() {
     local name="mrg"
     local port=${PORT_MRG}
 
-    log_info "启动 ${name} Worker (port ${port}, CPU only, env: ${CONDA_ENV_EXPERT})..."
+    log_info "启动 ${name} | port: ${port} | CPU | env: ${CONDA_ENV_EXPERT}"
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
@@ -230,7 +230,7 @@ start_mrg_worker() {
     " > "${LOG_DIR}/workers/${name}.log" 2>&1 &
 
     echo $! > "${PID_DIR}/${name}.pid"
-    log_info "${name} 已启动 (PID: $!, CPU only)"
+    log_success "${name} 已启动 | PID: $! | CPU"
     sleep 5
 }
 
@@ -238,7 +238,7 @@ start_mir_worker() {
     local name="mir"
     local port=${PORT_MIR}
 
-    log_info "启动 ${name} Worker (port ${port}, CPU only, env: ${CONDA_ENV_EXPERT})..."
+    log_info "启动 ${name} | port: ${port} | CPU | env: ${CONDA_ENV_EXPERT}"
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
@@ -255,7 +255,7 @@ start_mir_worker() {
     " > "${LOG_DIR}/workers/${name}.log" 2>&1 &
 
     echo $! > "${PID_DIR}/${name}.pid"
-    log_info "${name} 已启动 (PID: $!, CPU only)"
+    log_success "${name} 已启动 | PID: $! | CPU"
     sleep 5
 }
 
@@ -263,7 +263,7 @@ start_seq_worker() {
     local name="seq"
     local port=${PORT_SEQ}
 
-    log_info "启动 ${name} Worker (port ${port}, CPU only, env: ${CONDA_ENV_EXPERT})..."
+    log_info "启动 ${name} | port: ${port} | CPU | env: ${CONDA_ENV_EXPERT} (依赖 Agent)"
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
@@ -281,54 +281,73 @@ start_seq_worker() {
     " > "${LOG_DIR}/workers/${name}.log" 2>&1 &
 
     echo $! > "${PID_DIR}/${name}.pid"
-    log_info "${name} 已启动 (PID: $!, CPU only, depends on Agent)"
+    log_success "${name} 已启动 | PID: $! | CPU"
     sleep 5
 }
 
 start_workers() {
-    log_info "启动所有 Expert Workers..."
-    log_info "GPU分配: Cine2CHSeg=${GPU_SEG_2CH}, Cine4CHSeg=${GPU_SEG_4CH}, CineSASeg=${GPU_SEG_SA}, LgeSASeg=${GPU_SEG_LGE}, CDS=${GPU_CDS}, NICMS=${GPU_NICMS}"
+    log_info "========== 启动 Expert Workers =========="
+    log_info "GPU 分配: Seg2CH=${GPU_SEG_2CH}, Seg4CH=${GPU_SEG_4CH}, SegSA=${GPU_SEG_SA}, SegLGE=${GPU_SEG_LGE}, CDS=${GPU_CDS}, NICMS=${GPU_NICMS}"
 
+    log_info "--- Segmentation Workers ---"
     start_worker "cine_2ch_seg" ${PORT_SEG_2CH} "cine_2ch_seg_worker" 0 ${GPU_SEG_2CH}
     start_worker "cine_4ch_seg" ${PORT_SEG_4CH} "cine_4ch_seg_worker" 0 ${GPU_SEG_4CH}
     start_worker "cine_sa_seg"  ${PORT_SEG_SA}  "cine_sa_seg_worker"  0 ${GPU_SEG_SA}
     start_worker "lge_sa_seg"   ${PORT_SEG_LGE} "lge_sa_seg_worker"   0 ${GPU_SEG_LGE}
 
+    log_info "--- Classification Workers ---"
     start_worker "cds"   ${PORT_CDS}   "cds_worker"   0 ${GPU_CDS}
     start_worker "nicms" ${PORT_NICMS}  "nicms_worker" 0 ${GPU_NICMS}
 
-    log_info "等待分割服务就绪后启动Metrics和MRG..."
+    log_info "--- Service Workers (Metrics, MRG, MIR) ---"
     sleep 5
     start_metrics_worker
     start_mrg_worker
     start_mir_worker
 
-    log_info "启动Sequence Analysis (依赖Agent服务)..."
+    log_info "--- Sequence Analysis Worker (依赖 Agent) ---"
     start_seq_worker
 
-    log_info "所有Workers启动完成!"
+    log_success "========== 所有 Workers 启动完成 =========="
 }
 
 # ============ Demo 服务 ============
 
 start_demo_backend() {
-    log_info "启动 Demo Backend (port ${DEMO_BACKEND_PORT}, env: ${CONDA_ENV_DEMO})..."
+    log_info "启动 Demo Backend | port: ${DEMO_BACKEND_PORT} | env: ${CONDA_ENV_DEMO}"
 
+    # 强制清理占用目标端口的旧进程
     if check_port $DEMO_BACKEND_PORT; then
-        log_warn "端口 $DEMO_BACKEND_PORT 已被占用"
-        local pid=$(lsof -Pi :$DEMO_BACKEND_PORT -sTCP:LISTEN -t 2>/dev/null)
-        if [ -n "$pid" ]; then
-            log_info "现有进程 PID: $pid"
-            read -p "终止现有进程? [y/N] " confirm
-            if [[ $confirm == [yY] ]]; then
-                kill $pid 2>/dev/null
-                log_info "等待端口释放..."
-                sleep 3
-            else
-                log_error "无法启动 Demo Backend"
-                return 1
+        log_warn "端口 ${DEMO_BACKEND_PORT} 已被占用，清理旧进程..."
+        local old_pids
+        old_pids=$(lsof -Pi :$DEMO_BACKEND_PORT -sTCP:LISTEN -t 2>/dev/null) || true
+        for old_pid in $old_pids; do
+            log_info "终止旧进程 PID: ${old_pid}"
+            kill_tree "$old_pid" TERM
+        done
+        # 等待旧进程释放端口
+        local release_wait=0
+        while [ $release_wait -lt 10 ]; do
+            if ! check_port $DEMO_BACKEND_PORT; then
+                break
             fi
+            sleep 1
+            release_wait=$((release_wait + 1))
+        done
+        # TERM 不够就 KILL
+        if check_port $DEMO_BACKEND_PORT; then
+            old_pids=$(lsof -Pi :$DEMO_BACKEND_PORT -sTCP:LISTEN -t 2>/dev/null) || true
+            for old_pid in $old_pids; do
+                log_warn "强制杀死旧进程 PID: ${old_pid}"
+                kill_tree "$old_pid" KILL
+            done
+            sleep 2
         fi
+        if check_port $DEMO_BACKEND_PORT; then
+            log_error "无法释放端口 ${DEMO_BACKEND_PORT}，请手动检查"
+            return 1
+        fi
+        log_info "端口 ${DEMO_BACKEND_PORT} 已释放"
     fi
 
     cd "${PROJECT_DIR}"
@@ -343,55 +362,81 @@ start_demo_backend() {
     local backend_pid=$!
     echo $backend_pid > "${FRONTEND_PID_DIR}/backend.pid"
 
-    log_info "等待 Backend 启动（可能需要 20-30 秒）..."
-    local max_wait=60
+    log_info "等待 Backend 就绪..."
+    local max_wait=300
     local waited=0
     while [ $waited -lt $max_wait ]; do
+        if ! kill -0 $backend_pid 2>/dev/null; then
+            log_error "Demo Backend 进程已退出，查看日志: ${LOG_DIR}/demo_backend.log"
+            return 1
+        fi
         if check_port $DEMO_BACKEND_PORT; then
-            log_success "Demo Backend 已启动 (PID: $backend_pid, 耗时: ${waited}秒)"
+            # 再等 2 秒确认进程稳定（排除旧进程残留端口 + 新进程绑定失败的情况）
+            sleep 2
+            if ! kill -0 $backend_pid 2>/dev/null; then
+                log_error "Demo Backend 绑定端口后崩溃，查看日志: ${LOG_DIR}/demo_backend.log"
+                return 1
+            fi
+            log_success "Demo Backend 已启动 | PID: ${backend_pid} | 耗时: ${waited}s"
             log_info "API Docs: http://localhost:${DEMO_BACKEND_PORT}/docs"
             return 0
+        fi
+        if [ $((waited % 10)) -eq 0 ] && [ $waited -gt 0 ]; then
+            log_info "仍在等待 Backend 启动... (${waited}/${max_wait}s)"
         fi
         sleep 1
         waited=$((waited + 1))
     done
 
-    log_error "Demo Backend 启动超时，查看日志: ${LOG_DIR}/demo_backend.log"
+    log_error "Demo Backend 启动超时 (${max_wait}s)，查看日志: ${LOG_DIR}/demo_backend.log"
     return 1
 }
 
 start_demo_frontend() {
-    log_info "启动 Demo Frontend (port ${DEMO_FRONTEND_PORT})..."
+    log_info "启动 Demo Frontend | port: ${DEMO_FRONTEND_PORT} | env: ${CONDA_ENV_DEMO}"
 
     if check_port $DEMO_FRONTEND_PORT; then
-        log_warn "端口 $DEMO_FRONTEND_PORT 已被占用"
-        local pid=$(lsof -Pi :$DEMO_FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null)
-        if [ -n "$pid" ]; then
-            log_info "现有进程 PID: $pid"
-            read -p "终止现有进程? [y/N] " confirm
-            if [[ $confirm == [yY] ]]; then
-                kill $pid 2>/dev/null
-                log_info "等待端口释放..."
-                sleep 2
-            else
-                log_error "无法启动 Demo Frontend"
-                return 1
-            fi
+        log_warn "端口 ${DEMO_FRONTEND_PORT} 已被占用，清理旧进程..."
+        local old_pids
+        old_pids=$(lsof -Pi :$DEMO_FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null) || true
+        for old_pid in $old_pids; do
+            log_info "终止旧进程 PID: ${old_pid}"
+            kill_tree "$old_pid" TERM
+        done
+        sleep 2
+        if check_port $DEMO_FRONTEND_PORT; then
+            old_pids=$(lsof -Pi :$DEMO_FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null) || true
+            for old_pid in $old_pids; do
+                kill_tree "$old_pid" KILL
+            done
+            sleep 1
         fi
+        if check_port $DEMO_FRONTEND_PORT; then
+            log_error "无法释放端口 ${DEMO_FRONTEND_PORT}，请手动检查"
+            return 1
+        fi
+        log_info "端口 ${DEMO_FRONTEND_PORT} 已释放"
     fi
 
-    cd "${DEMO_DIR}"
-
-    nohup python -m http.server $DEMO_FRONTEND_PORT > "${LOG_DIR}/demo_frontend.log" 2>&1 &
+    nohup bash -c "
+        source ${CONDA_PATH}/etc/profile.d/conda.sh
+        conda activate ${CONDA_ENV_DEMO}
+        cd ${DEMO_DIR}
+        python -m http.server ${DEMO_FRONTEND_PORT}
+    " > "${LOG_DIR}/demo_frontend.log" 2>&1 &
     local frontend_pid=$!
     echo $frontend_pid > "${FRONTEND_PID_DIR}/frontend.pid"
 
-    log_info "等待 Frontend 启动..."
-    local max_wait=5
+    log_info "等待 Frontend 就绪..."
+    local max_wait=60
     local waited=0
     while [ $waited -lt $max_wait ]; do
+        if ! kill -0 $frontend_pid 2>/dev/null; then
+            log_error "Demo Frontend 进程已退出，查看日志: ${LOG_DIR}/demo_frontend.log"
+            return 1
+        fi
         if check_port $DEMO_FRONTEND_PORT; then
-            log_success "Demo Frontend 已启动 (PID: $frontend_pid)"
+            log_success "Demo Frontend 已启动 | PID: ${frontend_pid}"
             log_info "Frontend URL: http://localhost:${DEMO_FRONTEND_PORT}"
             return 0
         fi
@@ -399,12 +444,12 @@ start_demo_frontend() {
         waited=$((waited + 1))
     done
 
-    log_error "Demo Frontend 启动超时"
+    log_error "Demo Frontend 启动超时 (${max_wait}s)，查看日志: ${LOG_DIR}/demo_frontend.log"
     return 1
 }
 
 start_demo() {
-    log_info "启动 Demo 服务..."
+    log_info "========== 启动 Demo 服务 =========="
     start_demo_backend
     if [ $? -eq 0 ]; then
         start_demo_frontend
@@ -456,9 +501,9 @@ stop_all() {
     for port in ${PORT_CONTROLLER} ${PORT_AGENT} \
                 ${PORT_SEG_2CH} ${PORT_SEG_4CH} ${PORT_SEG_SA} ${PORT_SEG_LGE} \
                 ${PORT_CDS} ${PORT_NICMS} ${PORT_MRG} ${PORT_METRICS} ${PORT_MIR} ${PORT_SEQ}; do
-        local port_pid
-        port_pid=$(lsof -ti:${port} 2>/dev/null) || true
-        if [ ! -z "$port_pid" ]; then
+        local pids_on_port
+        pids_on_port=$(lsof -ti:${port} 2>/dev/null) || true
+        for port_pid in $pids_on_port; do
             local port_cmdline
             port_cmdline=$(tr '\0' ' ' < /proc/${port_pid}/cmdline 2>/dev/null) || true
             if echo "$port_cmdline" | grep -qF "${PROJECT_DIR}"; then
@@ -467,7 +512,7 @@ stop_all() {
             else
                 log_warn "端口 ${port} 被非本项目进程 ${port_pid} 占用，跳过"
             fi
-        fi
+        done
     done
 
     log_info "按进程模式匹配清理残留Python进程（仅限本项目）..."
@@ -548,6 +593,7 @@ stop_all() {
     fi
 
     log_info "所有服务已停止"
+    set -e
 }
 
 stop_demo() {
@@ -600,9 +646,9 @@ stop_demo() {
     done
 
     for port in ${DEMO_BACKEND_PORT} ${DEMO_FRONTEND_PORT}; do
-        local port_pid
-        port_pid=$(lsof -ti:${port} 2>/dev/null) || true
-        if [ ! -z "$port_pid" ]; then
+        local pids_on_port
+        pids_on_port=$(lsof -ti:${port} 2>/dev/null) || true
+        for port_pid in $pids_on_port; do
             local port_cmdline
             port_cmdline=$(tr '\0' ' ' < /proc/${port_pid}/cmdline 2>/dev/null) || true
             if echo "$port_cmdline" | grep -qF "${PROJECT_DIR}"; then
@@ -611,10 +657,11 @@ stop_demo() {
             else
                 log_warn "端口 ${port} 被非本项目进程 ${port_pid} 占用，跳过"
             fi
-        fi
+        done
     done
 
     log_success "Demo 服务已停止"
+    set -e
 }
 
 # ============ 状态查询 ============
@@ -828,7 +875,8 @@ show_help() {
     echo "  ./app/start.sh demo             只启动Demo (Backend + Frontend)"
     echo "  ./app/start.sh frontend         只启动前端 (Frontend only)"
     echo "  ./app/start.sh full             启动完整系统 (所有服务 + Demo)"
-    echo "  ./app/start.sh stop [service]   停止所有服务或指定服务"
+    echo "  ./app/start.sh stop             停止所有服务"
+    echo "  ./app/start.sh stop <service>   停止指定服务 (如 controller, agent_model, cds 等)"
     echo "  ./app/start.sh stop-demo        只停止Demo服务"
     echo "  ./app/start.sh status           查看服务状态"
     echo "  ./app/start.sh health           健康检查 (通过HTTP)"
@@ -875,7 +923,7 @@ case "$1" in
         show_demo_info
         ;;
     full)
-        log_info "启动完整系统 (所有服务 + Demo)..."
+        log_info "========== 启动完整系统 (所有服务 + Demo) =========="
         start_controller
         sleep 2
         start_agent
@@ -886,7 +934,33 @@ case "$1" in
         health_check
         ;;
     stop)
-        stop_all
+        if [ -n "$2" ]; then
+            local svc="$2"
+            local pid_file="${PID_DIR}/${svc}.pid"
+            if [ -f "$pid_file" ]; then
+                set +e
+                local pid=$(cat "$pid_file")
+                if kill -0 "$pid" 2>/dev/null; then
+                    kill_tree "$pid" TERM
+                    sleep 1
+                    if kill -0 "$pid" 2>/dev/null; then
+                        kill_tree "$pid" KILL
+                        sleep 0.5
+                    fi
+                    log_info "已停止 ${svc} (PID: ${pid})"
+                else
+                    log_warn "${svc} 进程不存在 (PID: ${pid})"
+                fi
+                rm -f "$pid_file"
+                set -e
+            else
+                log_error "未找到服务 '${svc}' 的 PID 文件: ${pid_file}"
+                log_info "可用服务: controller, agent_model, cine_2ch_seg, cine_4ch_seg, cine_sa_seg, lge_sa_seg, cds, nicms, metrics, mrg, mir, seq"
+                exit 1
+            fi
+        else
+            stop_all
+        fi
         ;;
     stop-demo)
         stop_demo

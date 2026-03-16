@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cardiac Agent</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=29">
+  <link rel="stylesheet" href="style.css?v=30">
 </head>
 
 <body>
@@ -15,7 +15,7 @@
       <div class="logo">
         <div class="logo-icon">🫀</div>
         <div class="logo-text">
-          <h1>Cardiac Agent</h1>
+          <h1>BAAI Cardiac Agent</h1>
           <span>Intelligent Cardiac Imaging Analysis</span>
         </div>
       </div>
@@ -32,21 +32,21 @@
         <div class="sidebar-section">
           <h3>Task Type</h3>
           <div class="task-selector">
-            <button class="task-btn active" data-task="auto">
-              <span class="icon">🤖</span>
-              <span>Agent Auto</span>
+            <button class="task-btn active" data-task="mr">
+              <span class="icon">🫀</span>
+              <span>MR</span>
             </button>
-            <button class="task-btn" data-task="rag">
-              <span class="icon">💬</span>
-              <span>Medical Info Retrieval</span>
+            <button class="task-btn disabled" data-task="ct" disabled>
+              <span class="icon">🩻</span>
+              <span>CT</span>
             </button>
-            <button class="task-btn" data-task="direct_chat">
-              <span class="icon">🖼️</span>
-              <span>Smart Chat (PNG)</span>
+            <button class="task-btn disabled" data-task="us" disabled>
+              <span class="icon">🔊</span>
+              <span>US</span>
             </button>
-            <button class="task-btn" data-task="agent_vqa">
-              <span class="icon">🔍</span>
-              <span>Agent VQA</span>
+            <button class="task-btn disabled" data-task="ecg" disabled>
+              <span class="icon">📈</span>
+              <span>ECG</span>
             </button>
           </div>
         </div>
@@ -66,7 +66,7 @@
         <div class="sidebar-section">
           <h3>Task Description</h3>
           <p id="taskDescription" style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
-            Agent-Driven mode: Upload MRI files → Agent auto-identifies sequences → Smart frame extraction → Agent decides API → Expert model. Results downloadable with original filenames (seg labels, NIFTI, PDF reports).
+            Cardiac MR mode: Upload cardiac MRI files (.zip/.nii.gz) → Agent identifies sequences → Smart frame extraction → Agent decides API → Expert model → Download results (seg labels, NIFTI, PDF reports).
           </p>
         </div>
 
@@ -156,7 +156,7 @@
     </main>
   </div>
 
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=30"></script>
 </body>
 
 </html>
