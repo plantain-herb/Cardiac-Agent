@@ -1,6 +1,50 @@
-# Cardiac-Agent
+<div align="center">
 
-An intelligent cardiac MRI analysis system driven by a multimodal agent. The system orchestrates a fine-tuned LLaVA-based agent with multiple expert models to provide automated sequence identification, cardiac structure segmentation, disease screening, and comprehensive report generation.
+# 🫀 Cardiac-Agent
+
+**An Intelligent Cardiac MRI Analysis System Driven by a Multimodal Agent**
+
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c.svg)](https://pytorch.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red.svg)]()
+
+The system orchestrates a fine-tuned LLaVA-based agent with multiple expert models to provide automated **sequence identification**, **cardiac structure segmentation**, **disease screening**, and **comprehensive report generation**.
+
+</div>
+
+---
+
+## Demo
+
+### Cardiac Structure Segmentation
+
+Upload cardiac MRI and let the agent automatically identify sequences, select expert segmentation models, and return labeled results.
+
+<video controls>
+  <source src="demo/seg.mp4" type="video/mp4">
+  您的浏览器不支持视频标签。
+</video>
+
+### Disease Screening & Classification
+
+The agent dispatches cardiac disease screening (CDS) and non-ischemic cardiomyopathy subtyping (NICMS) expert workers for automated diagnosis.
+
+<video controls>
+  <source src="demo/cls.mp4" type="video/mp4">
+  您的浏览器不支持视频标签。
+</video>
+
+### Report Generation
+
+End-to-end pipeline: from raw DICOM/NIfTI uploads to a downloadable PDF report with cardiac metrics, classification results, and clinical evaluation.
+
+<video controls>
+  <source src="demo/mrg.mp4" type="video/mp4">
+  您的浏览器不支持视频标签。
+</video>
+
+---
 
 ## Overview
 
@@ -80,6 +124,10 @@ Cardiac-Agent/
 │       ├── index.html
 │       ├── app.js
 │       └── style.css
+├── demo/                         # Demo videos
+│   ├── demo_segmentation.mp4     # Segmentation demo
+│   ├── demo_disease_screening.mp4# Disease screening demo
+│   └── demo_report.mp4           # Report generation demo
 ├── serve/                        # Worker services
 │   ├── controller.py             # Worker registry & dispatch controller
 │   ├── agent_worker.py           # LLaVA multimodal agent worker (GPU)
@@ -125,7 +173,7 @@ Cardiac-Agent/
 ## Prerequisites
 
 - Python 3.8+
-- CUDA-capable GPU(s) — the agent and segmentation/classification workers require GPU
+- CUDA-capable GPU(s) -- the agent and segmentation/classification workers require GPU
 - Conda (for environment management)
 - Model weights placed in `weights/`
 
@@ -154,9 +202,9 @@ cp app/.env.example app/.env
 ```
 
 Key environment variables:
-- `API_KEY` — API key for the LLM service (used by MIR / RAG)
-- `API_BASE_URL` — Base URL for the LLM API
-- `MODEL` — LLM model name (default: `deepseek-chat`)
+- `API_KEY` -- API key for the LLM service (used by MIR / RAG)
+- `API_BASE_URL` -- Base URL for the LLM API
+- `MODEL` -- LLM model name (default: `deepseek-chat`)
 
 ### 3. Start All Services
 
@@ -214,10 +262,10 @@ POST /api/chat
 The primary interface. Accepts multimodal inputs (DICOM ZIP, NIfTI, PNG images) and natural language questions. The agent automatically determines the appropriate analysis pipeline.
 
 **Form parameters:**
-- `message` — User question (string)
-- `files` — Uploaded files (multipart, supports `.zip`, `.nii.gz`, `.nii`, `.png`, `.jpg`)
-- `session_id` — Session ID (optional, auto-created if empty)
-- `task_type` — Force a specific task type: `agent_vqa`, `rag`, `direct_chat` (optional)
+- `message` -- User question (string)
+- `files` -- Uploaded files (multipart, supports `.zip`, `.nii.gz`, `.nii`, `.png`, `.jpg`)
+- `session_id` -- Session ID (optional, auto-created if empty)
+- `task_type` -- Imaging modality: `mr`, `ct`, `us`, `ecg` (default: `mr`)
 
 ### Specialized Endpoints
 
@@ -234,9 +282,9 @@ The primary interface. Accepts multimodal inputs (DICOM ZIP, NIfTI, PNG images) 
 
 ## Supported Input Formats
 
-- **DICOM** — ZIP archive containing a DICOM series
-- **NIfTI** — `.nii` or `.nii.gz` volume files
-- **Images** — `.png`, `.jpg`, `.jpeg` for direct Agent VQA
+- **DICOM** -- ZIP archive containing a DICOM series
+- **NIfTI** -- `.nii` or `.nii.gz` volume files
+- **Images** -- `.png`, `.jpg`, `.jpeg` for direct Agent VQA
 
 ## Supported CMR Sequences
 
