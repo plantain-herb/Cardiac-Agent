@@ -24,7 +24,6 @@ from app.services.heart_agent import HeartMRIAgent
 from app.services.session_manager import get_session_manager
 from app.utils.conversation import save_conversation_json
 from app.utils.dicom import extract_zip_file
-from app.utils.report import generate_cardiac_report_pdf
 
 
 def create_api_app():
@@ -192,14 +191,11 @@ def create_api_app():
             engine = os.getenv("MODEL", "deepseek-chat")
             base_url = os.getenv("API_BASE_URL")
 
-            # 确定任务类型
-            effective_task_type = task_type if task_type else None
-
             # 调用Agent处理（传入session_id用于缓存抽帧结果）
             result = agent.process_request(
                 question=message,
                 volume_paths=volume_paths if volume_paths else None,
-                task_type=effective_task_type,
+                task_type=task_type if task_type else "mr",
                 session_id=session_id,
                 image_paths=image_paths if image_paths else None,
                 api_key=api_key,
@@ -459,181 +455,5 @@ def create_api_app():
             media_type="application/json",
             headers={"Content-Disposition": f"attachment; filename={merged_filename}"}
         )
-
-    @app.post("/api/segment")
-    async def segment(
-        file: UploadFile = File(...),
-        question: str = Form("Segment the cardiac structures."),
-        session_id: str = Form(""),
-    ):
-        """分割接口 - 支持 zip 文件上传和缓存"""
-        # 创建或获取会话
-        if not session_id:
-            session_id = session_mgr.create_session()
-
-        session = session_mgr.get_session(session_id)
-        if not session:
-            session_id = session_mgr.create_session()
-            session = session_mgr.get_session(session_id)
-
-        upload_dir = session["upload_dir"]
-        file_id = str(uuid.uuid4())[:8]
-        filename_lower = file.filename.lower()
-        volume_path = None
-
-        try:
-            content = await file.read()
-
-            if filename_lower.endswith(".zip"):
-                # 保存并解压 zip 文件
-                zip_path = os.path.join(upload_dir, f"{file_id}_{file.filename}")
-                with open(zip_path, "wb") as f:
-                    f.write(content)
-
-                extracted_dir = os.path.join(upload_dir, f"{file_id}_extracted")
-                os.makedirs(extracted_dir, exist_ok=True)
-                volume_path = extract_zip_file(zip_path, extracted_dir)
-            else:
-                # 直接保存文件
-                volume_path = os.path.join(upload_dir, f"{file_id}_{file.filename}")
-                with open(volume_path, "wb") as f:
-                    f.write(content)
-
-            if volume_path:
-                session_mgr.add_file(session_id, volume_path, file.filename)
-
-            api_key = os.getenv("API_KEY")
-            engine = os.getenv("MODEL", "deepseek-chat")
-            base_url = os.getenv("API_BASE_URL")
-
-            result = agent.process_segmentation_request(
-                question=question,
-                volume_path=volume_path,
-                session_id=session_id,
-                api_key=api_key,
-                engine=engine,
-                base_url=base_url,
-            )
-
-            # 获取抽帧结果的URL
-            frame_urls = []
-            for frame_info in result.get("frame_info", []):
-                if frame_info:
-                    for f in frame_info.get("frame_files", []):
-                        frame_urls.append({
-                            "url": f"/cache/frames/{VERSION}/{session_id}/{f['filename']}",
-                            "filename": f["filename"],
-                            "frame_index": f["frame_index"],
-                        })
-
-            # 获取分割结果
-            seg_result = result.get("seg_result", {})
-            seg_image_url = seg_result.get("seg_image_url") if seg_result else None
-
-            return JSONResponse({
-                "response": result.get("final_answer", "分割完成"),
-                "session_id": session_id,
-                "api_name": result.get("api_name"),
-                "modality": result.get("modality"),
-                "frame_urls": frame_urls,
-                "seg_result": seg_result,
-                "seg_image_url": seg_image_url,
-            })
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return JSONResponse({
-                "response": f"处理失败: {str(e)}",
-                "session_id": session_id,
-                "error": str(e),
-            })
-
-    @app.post("/api/classify")
-    async def classify(
-        files: List[UploadFile] = File(...),
-        question: str = Form("Classify the cardiomyopathy."),
-        task_type: str = Form("classification"),  # classification 或 ncc_classification
-        session_id: str = Form(""),
-    ):
-        """分类接口 - 支持 zip 文件上传和缓存"""
-        # 创建或获取会话
-        if not session_id:
-            session_id = session_mgr.create_session()
-
-        session = session_mgr.get_session(session_id)
-        if not session:
-            session_id = session_mgr.create_session()
-            session = session_mgr.get_session(session_id)
-
-        upload_dir = session["upload_dir"]
-        volume_paths = []
-
-        try:
-            for file in files:
-                file_id = str(uuid.uuid4())[:8]
-                filename_lower = file.filename.lower()
-                content = await file.read()
-
-                if filename_lower.endswith(".zip"):
-                    # 保存并解压 zip 文件
-                    zip_path = os.path.join(upload_dir, f"{file_id}_{file.filename}")
-                    with open(zip_path, "wb") as f:
-                        f.write(content)
-
-                    extracted_dir = os.path.join(upload_dir, f"{file_id}_extracted")
-                    os.makedirs(extracted_dir, exist_ok=True)
-                    dcm_path = extract_zip_file(zip_path, extracted_dir)
-
-                    if dcm_path:
-                        volume_paths.append(dcm_path)
-                        session_mgr.add_file(session_id, dcm_path, file.filename)
-                else:
-                    file_path = os.path.join(upload_dir, f"{file_id}_{file.filename}")
-                    with open(file_path, "wb") as f:
-                        f.write(content)
-                    volume_paths.append(file_path)
-                    session_mgr.add_file(session_id, file_path, file.filename)
-
-            api_key = os.getenv("API_KEY")
-            engine = os.getenv("MODEL", "deepseek-chat")
-            base_url = os.getenv("API_BASE_URL")
-
-            if task_type == "ncc_classification":
-                result = agent.process_nicms_auto(
-                    question, volume_paths, api_key, engine, base_url, session_id=session_id
-                )
-            else:
-                result = agent.process_cds_auto(
-                    question, volume_paths, api_key, engine, base_url, session_id=session_id
-                )
-
-            # 获取抽帧结果的URL
-            frame_urls = []
-            for frame_info in result.get("frame_info", []):
-                if frame_info:
-                    for f in frame_info.get("frame_files", []):
-                        frame_urls.append({
-                            "url": f"/cache/frames/{VERSION}/{session_id}/{f['filename']}",
-                            "filename": f["filename"],
-                            "frame_index": f["frame_index"],
-                        })
-
-            return JSONResponse({
-                "response": result.get("final_answer", result.get("error", "分类完成")),
-                "session_id": session_id,
-                "prediction": result.get("prediction"),
-                "cds_result": result.get("cds_result"),
-                "nicms_result": result.get("nicms_result"),
-                "api_name": result.get("api_name"),
-                "frame_urls": frame_urls,
-            })
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return JSONResponse({
-                "response": f"处理失败: {str(e)}",
-                "session_id": session_id,
-                "error": str(e),
-            })
 
     return app
