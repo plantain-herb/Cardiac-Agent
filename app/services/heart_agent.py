@@ -7,8 +7,6 @@ import tempfile
 import time
 from typing import Dict, List, Tuple
 
-import SimpleITK as sitk
-
 from app.config import (
     API_NAME_TO_WORKER,
     CACHE_RESULTS_DIR,
@@ -127,861 +125,6 @@ class HeartMRIAgent:
         final_value = self.agent_client._parse_value(final_response)
         
         return final_response, final_value
-    
-    # ============ 分割请求 ============
-    def process_segmentation_request(self, question: str, volume_path: str, 
-                                     modality: str = None, output_path: str = None,
-                                     api_key: str = None, engine: str = "gpt-4o",
-                                     base_url: str = None, session_id: str = None) -> Dict:
-        """
-        处理分割请求
-        
-        如果未指定modality，会自动进行序列识别
-        """
-        print("\n" + "="*60)
-        print("分割任务处理流程")
-        print("="*60)
-        
-        frame_info = None
-        seg_result_info = {}
-        nifti_path = volume_path  # 用于传给分割Worker的路径
-        
-        # 如果是 DICOM 目录，先转换为 nii.gz
-        if not (volume_path.endswith(".nii.gz") or volume_path.endswith(".nii")):
-            print("\n[Step 0] 转换 DICOM 到 NIfTI...")
-            if session_id:
-                nifti_output_dir = os.path.join(CACHE_RESULTS_DIR, session_id, "nifti")
-                volume_name = os.path.basename(volume_path)
-                nifti_path = convert_dcm_to_nifti(volume_path, nifti_output_dir, volume_name)
-            else:
-                # 临时目录
-                import tempfile
-                nifti_output_dir = tempfile.mkdtemp()
-                volume_name = os.path.basename(volume_path)
-                nifti_path = convert_dcm_to_nifti(volume_path, nifti_output_dir, volume_name)
-        
-        # 如果未指定modality，自动识别
-        if modality is None:
-            print("\n[Step 1] 序列识别...")
-            seq_result = self.seq_identifier.identify_single(
-                volume_path, api_key, engine, base_url, session_id
-            )
-            modality = seq_result.get("modality", "sa")
-            # 复用序列识别时的抽帧结果（避免重复抽帧）
-            if seq_result.get("frame_info"):
-                frame_info = seq_result["frame_info"]
-            print(f"  识别结果: {modality}")
-        
-        # 提取帧（如果序列识别已经抽过帧，则复用）
-        if frame_info is None:
-            print("\n[Step 2] 提取帧...")
-            frame_images, frame_info = extract_frames_from_volume(
-                volume_path, session_id=session_id, save_to_cache=(session_id is not None)
-            )
-        else:
-            print("\n[Step 2] 复用序列识别的抽帧结果...")
-            # 从 frame_info 获取图片路径
-            frame_images = [f["path"] for f in frame_info.get("frame_files", [])]
-        
-        # 如果有会话，记录抽帧信息
-        if session_id:
-            session_mgr = get_session_manager()
-            session_mgr.add_frames(session_id, frame_info)
-        
-        # 第一次Agent调用 - 在 prompt 中加入序列信息
-        # 注意：chat 方法会自动根据图片数量添加正确数量的 <image> token
-        sequence_info = f"This is a {modality.upper()} cardiac MRI sequence. "
-        prompt = f"{sequence_info}{question}"
-        
-        print("\n[Step 3] 第一次Agent调用...")
-        print(f"  序列提示: {sequence_info}")
-        print(f"  图片数量: {len(frame_images)}")
-        first_response, action = self.agent_client.chat(prompt, frame_images)
-        
-        # 使用 Agent 返回的 API，如果没有返回或不在有效列表中，则根据 modality 选择默认分割 API
-        api_name_map = {
-            "2ch": "2CH Cine Segmentation", 
-            "4ch": "4CH Cine Segmentation",
-            "sa": "SAX Cine Segmentation", 
-            "lge": "SAX LGE Segmentation"
-        }
-        
-        if action and "API_name" in action:
-            # 验证 Agent 返回的 API 名称是否有效
-            if action["API_name"] in API_NAME_TO_WORKER:
-                api_name = action["API_name"]
-                print(f"  使用 Agent 返回的 API: {api_name}")
-            else:
-                # Agent 返回的 API 无效，使用默认映射
-                api_name = api_name_map.get(modality.lower(), "SAX Cine Segmentation")
-                print(f"  Agent 返回的 API 无效 ({action['API_name']})，使用默认: {api_name}")
-        else:
-            # Agent 没有返回 API，使用默认映射
-            api_name = api_name_map.get(modality.lower(), "SAX Cine Segmentation")
-            print(f"  Agent 未返回 API，使用默认: {api_name}")
-        
-        print(f"  最终 API: {api_name}")
-        
-        # 设置分割结果输出路径 — 使用原始上传文件名
-        if session_id:
-            seg_output_dir = os.path.join(CACHE_RESULTS_DIR, session_id, "segmentation")
-            os.makedirs(seg_output_dir, exist_ok=True)
-            _smgr = get_session_manager()
-            orig_name = _smgr.get_original_name(session_id, volume_path)
-            seg_filename = get_clean_seg_name(orig_name, "_seg")
-            seg_output_path = os.path.join(seg_output_dir, seg_filename)
-        else:
-            seg_output_path = output_path
-        
-        # 调用Expert（使用 nifti_path，只保存 nii.gz，图片由后端生成）
-        print("\n[Step 4] 调用Expert分割模型...")
-        worker_name = API_NAME_TO_WORKER.get(api_name)
-        print(f"  Worker: {worker_name}")
-        print(f"  输入路径: {nifti_path}")
-        print(f"  输出路径: {seg_output_path}")
-        
-        expert_result = self.expert_client.call_seg(
-            worker_name, nifti_path, 
-            output_path=seg_output_path
-        )
-        
-        print(f"  Expert返回: {expert_result}")
-        
-        # 检查分割结果文件是否存在
-        seg_file_exists = seg_output_path and os.path.exists(seg_output_path)
-        print(f"  分割文件存在: {seg_file_exists}")
-        
-        # 保存分割结果可视化图片（使用与抽帧相同的帧索引）
-        if session_id and "error" not in expert_result and seg_file_exists:
-            print("\n[Step 5] 保存分割结果图片...")
-            # 获取抽帧使用的帧索引
-            extracted_indices = frame_info.get("extracted_indices", None)
-            seg_result_info = save_segmentation_images(
-                nifti_path, seg_output_path, session_id, 
-                frame_indices=extracted_indices
-            )
-            print(f"  分割 nii.gz 保存到: {seg_output_path}")
-            print(f"  分割图片数量: {len(seg_result_info.get('seg_files', []))}")
-        elif session_id:
-            seg_result_info = {
-                "seg_nii_path": seg_output_path,
-                "error": expert_result.get("error", "分割失败"),
-            }
-            print(f"  分割失败: {seg_result_info.get('error')}")
-        
-        # 第二次Agent调用（传入第一次响应以构建正确对话历史）
-        full_response, final_value = self._two_turn_call(question, frame_images, api_name, expert_result, first_response)
-        
-        # 如果没有缓存，清理临时文件
-        if not session_id:
-            cleanup_temp_files(frame_images)
-        
-        return {
-            "question": question,
-            "api_name": api_name,
-            "modality": modality,
-            "expert_result": expert_result,
-            "final_answer": final_value,
-            "frame_info": [frame_info] if frame_info else [],
-            "session_id": session_id,
-            "seg_result": seg_result_info,
-        }
-    
-    # ============ CDS分类请求（带自动序列识别） ============
-    def process_classification_auto(self, question: str, volume_paths: List[str],
-                                     api_key: str = None, engine: str = "gpt-4o",
-                                     base_url: str = None, session_id: str = None, **kwargs) -> Dict:
-        """
-        处理分类请求 - Agent自动决定API版本
-        
-        流程:
-        1. 并行序列识别所有上传的文件
-        2. 提取代表帧发送给Agent
-        3. Agent根据问题和图像决定调用哪个API (CC或NCC)
-        4. 根据Agent返回的API检查所需模态
-        5. 调用对应的Expert模型
-        
-        Args:
-            question: 用户问题
-            volume_paths: 上传的volume文件路径列表
-            session_id: 会话ID
-            
-        Returns:
-            分类结果
-        """
-        print("\n" + "="*60)
-        print("分类任务（Agent自动决定API）")
-        print("="*60)
-        
-        # Step 1: 并行序列识别
-        print("\n[Step 1] 并行序列识别...")
-        id_results = self.seq_identifier.identify_parallel(
-            volume_paths, api_key, engine, base_url, session_id
-        )
-        
-        # 显示识别结果
-        print(f"\n  识别结果:")
-        for path, modality in id_results.items():
-            print(f"    {os.path.basename(path)}: {modality}")
-        
-        # Step 2: 提取所有图像的代表帧
-        print("\n[Step 2] 提取代表帧...")
-        all_frame_info = []
-        agent_images = []
-        path_to_modality = {}  # 记录路径和模态的映射
-        
-        for path, modality in id_results.items():
-            if os.path.exists(path):
-                frames, frame_info = extract_frames_from_volume(
-                    path, num_frames=1,
-                    session_id=session_id, save_to_cache=(session_id is not None)
-                )
-                agent_images.extend(frames)
-                all_frame_info.append(frame_info)
-                path_to_modality[path] = modality
-                
-                if session_id:
-                    session_mgr = get_session_manager()
-                    session_mgr.add_frames(session_id, frame_info)
-        
-        print(f"  提取了 {len(agent_images)} 张代表帧")
-        
-        # Step 3: 调用Agent，让Agent决定API
-        print("\n[Step 3] 调用Agent决定API...")
-        print(f"  问题: {question[:100]}..." if len(question) > 100 else f"  问题: {question}")
-        first_response, action = self.agent_client.chat(question, agent_images)
-        
-        print(f"\n[Agent 第一轮返回]")
-        print(f"  Action: {action}")
-        print(f"  Response (前200字符): {first_response[:200]}..." if len(first_response) > 200 else f"  Response: {first_response}")
-        
-        # Step 4: 解析Agent返回的API
-        api_name = None
-        if action and "API_name" in action:
-            api_name = action.get("API_name")
-        
-        # 根据API决定所需模态
-        # CDS：必须 4ch + sa，可选 2ch（缺失时用空图像占位）
-        # NICMS：必须 sa + lge，可选 4ch（缺失时用空图像占位）
-        API_TO_REQUIRED_MODALITIES = {
-            "Cardiac Disease Screening": ["4ch", "sa"],  # 必须模态
-            "Non-ischemic Cardiomyopathy Subclassification": ["sa", "lge"],  # 必须模态
-        }
-        API_TO_OPTIONAL_MODALITIES = {
-            "Cardiac Disease Screening": ["2ch"],  # 可选模态（缺失时Worker用空图像占位）
-            "Non-ischemic Cardiomyopathy Subclassification": ["4ch"],  # 可选模态（缺失时Worker用空图像占位）
-        }
-        
-        # 默认使用CDS
-        if api_name not in API_TO_REQUIRED_MODALITIES:
-            print(f"  Agent返回的API '{api_name}' 不是分类API，使用默认: Cardiac Disease Screening")
-            api_name = "Cardiac Disease Screening"
-        
-        required_modalities = API_TO_REQUIRED_MODALITIES[api_name]
-        optional_modalities = API_TO_OPTIONAL_MODALITIES.get(api_name, [])
-        print(f"\n[Step 4] Agent决定使用API: {api_name}")
-        print(f"  必须模态: {required_modalities}")
-        if optional_modalities:
-            print(f"  可选模态: {optional_modalities}")
-        
-        # Step 5: 匹配所需模态
-        print("\n[Step 5] 匹配模态...")
-        # 先匹配必须模态
-        matched = self.seq_identifier.match_modalities(id_results, required_modalities)
-        
-        if len(matched) < len(required_modalities):
-            missing = [m for m in required_modalities if m not in matched]
-            return {
-                "error": f"缺少必需的模态: {missing}",
-                "api_name": api_name,
-                "required_modalities": required_modalities,
-                "identified": id_results,
-                "matched": matched,
-                "session_id": session_id,
-                "agent_response": first_response,
-            }
-        
-        # 再匹配可选模态（有就用，没有也行）
-        if optional_modalities:
-            optional_matched = self.seq_identifier.match_modalities(id_results, optional_modalities)
-            matched.update(optional_matched)
-        
-        print(f"  模态匹配成功!")
-        for mod, path in matched.items():
-            is_optional = mod in optional_modalities
-            print(f"    {mod}: {os.path.basename(path)}" + (" (可选)" if is_optional else ""))
-        
-        # Step 6: 调用对应的Expert
-        print(f"\n[Step 6] 调用Expert: {api_name}...")
-        worker_name = API_NAME_TO_WORKER.get(api_name)
-        
-        if api_name == "Cardiac Disease Screening":
-            # CDS：4ch + sa 必须，2ch 可选（缺失时 Worker 用空图像占位）
-            image_2ch = matched.get("2ch")  # 可能为 None
-            
-            if image_2ch is None:
-                print(f"  注意: 未提供 2ch 模态，Worker 将使用空图像占位")
-            
-            expert_result = self.expert_client.call_cds(
-                worker_name, image_2ch, matched["4ch"], matched["sa"], **kwargs
-            )
-            
-            # 检查是否有错误
-            if "error" in expert_result:
-                print(f"\n[Expert 返回错误]")
-                print(f"  错误: {expert_result.get('error')}")
-                return {
-                    "error": expert_result.get("error"),
-                    "api_name": api_name,
-                    "identified": id_results,
-                    "matched": matched,
-                    "session_id": session_id,
-                    "agent_response": first_response,
-                }
-            
-            pred_class = expert_result.get("pred_class", -1)
-            class_name = self.CC_CLASSES.get(pred_class, f"Unknown ({pred_class})")
-        else:
-            # NICMS：sa + lge 必须，4ch 可选（缺失时 Worker 用空图像占位）
-            image_4ch = matched.get("4ch")  # 可能为 None
-            
-            if image_4ch is None:
-                print(f"  注意: 未提供 4ch 模态，Worker 将使用空图像占位")
-            
-            expert_result = self.expert_client.call_nicms(
-                worker_name, image_4ch, matched["sa"], matched["lge"], **kwargs
-            )
-            
-            # 检查是否有错误
-            if "error" in expert_result:
-                print(f"\n[Expert 返回错误]")
-                print(f"  错误: {expert_result.get('error')}")
-                return {
-                    "error": expert_result.get("error"),
-                    "api_name": api_name,
-                    "identified": id_results,
-                    "matched": matched,
-                    "session_id": session_id,
-                    "agent_response": first_response,
-                }
-            
-            pred_class = expert_result.get("pred_class", -1)
-            class_name = self.NCC_CLASSES.get(pred_class, f"Unknown ({pred_class})")
-        
-        print(f"\n[Expert 返回]")
-        print(f"  预测类别: {class_name}")
-        
-        # Step 7: 第二次Agent调用（总结结果）
-        print("\n[Step 7] 第二次Agent调用（总结结果）...")
-        full_response, final_value = self._two_turn_call(question, agent_images, api_name, expert_result, first_response)
-        
-        if not session_id:
-            cleanup_temp_files(agent_images)
-        
-        return {
-            "question": question,
-            "api_name": api_name,
-            "prediction": class_name,
-            "expert_result": expert_result,
-            "final_answer": final_value,
-            "frame_info": all_frame_info,
-            "detected_sequences": [{"path": p, "modality": m} for p, m in id_results.items()],
-            "session_id": session_id,
-        }
-    
-    def process_cds_auto(self, question: str, volume_paths: List[str],
-                                       api_key: str = None, engine: str = "gpt-4o",
-                                       base_url: str = None, session_id: str = None, **kwargs) -> Dict:
-        """
-        处理CDS分类请求 - 自动序列识别版（保留兼容性，内部调用process_classification_auto）
-        """
-        return self.process_classification_auto(question, volume_paths, api_key, engine, base_url, session_id, **kwargs)
-    
-    def process_cds_auto_legacy(self, question: str, volume_paths: List[str],
-                                       api_key: str = None, engine: str = "gpt-4o",
-                                       base_url: str = None, session_id: str = None, **kwargs) -> Dict:
-        """
-        处理CDS分类请求 - 自动序列识别版（旧版本，强制使用CDS分类）
-        
-        Args:
-            volume_paths: 上传的volume文件路径列表（不知道具体模态）
-            session_id: 会话ID（用于缓存）
-            
-        Returns:
-            分类结果
-        """
-        print("\n" + "="*60)
-        print("CDS分类任务（自动序列识别）")
-        print("="*60)
-        
-        # Step 1: 并行序列识别
-        print("\n[Step 1] 并行序列识别...")
-        id_results = self.seq_identifier.identify_parallel(
-            volume_paths, api_key, engine, base_url, session_id
-        )
-        
-        # Step 2: 匹配所需模态
-        print("\n[Step 2] 匹配模态...")
-        matched = self.seq_identifier.match_modalities(id_results, ["2ch", "4ch", "sa"])
-        
-        if len(matched) < 3:
-            missing = [m for m in ["2ch", "4ch", "sa"] if m not in matched]
-            return {
-                "error": f"缺少必需的模态: {missing}",
-                "identified": id_results,
-                "matched": matched,
-                "session_id": session_id,
-            }
-        
-        print(f"  匹配结果: 2ch={os.path.basename(matched['2ch'])}, "
-              f"4ch={os.path.basename(matched['4ch'])}, sa={os.path.basename(matched['sa'])}")
-        
-        # Step 3: 使用匹配的路径进行分类
-        return self.process_cds_request(
-            question=question,
-            image_2ch=matched["2ch"],
-            image_4ch=matched["4ch"],
-            image_sa=matched["sa"],
-            session_id=session_id,
-            **kwargs
-        )
-    
-    def process_cds_request(self, question: str, image_2ch: str, 
-                                          image_4ch: str, image_sa: str, 
-                                          session_id: str = None, **kwargs) -> Dict:
-        """处理CDS分类请求（已知模态）"""
-        print("\n" + "="*60)
-        print("CDS分类任务处理流程")
-        print("="*60)
-        
-        all_frame_info = []
-        
-        # 提取帧
-        print("\n[Step 1] 提取帧...")
-        agent_images = []
-        for path in [image_sa, image_4ch, image_2ch]:
-            if os.path.exists(path):
-                frames, frame_info = extract_frames_from_volume(
-                    path, num_frames=1,
-                    session_id=session_id, save_to_cache=(session_id is not None)
-                )
-                agent_images.extend(frames)
-                all_frame_info.append(frame_info)
-                
-                if session_id:
-                    session_mgr = get_session_manager()
-                    session_mgr.add_frames(session_id, frame_info)
-        
-        # 第一次Agent调用
-        # 注意：chat 方法会自动根据图片数量添加正确数量的 <image> token
-        print("\n[Step 2] 第一次Agent调用...")
-        print(f"  图片数量: {len(agent_images)}")
-        print(f"  问题: {question[:100]}..." if len(question) > 100 else f"  问题: {question}")
-        first_response, action = self.agent_client.chat(question, agent_images)
-        
-        print(f"\n[Agent 第一轮返回]")
-        print(f"  Action: {action}")
-        print(f"  Response (前200字符): {first_response[:200]}..." if len(first_response) > 200 else f"  Response: {first_response}")
-        
-        api_name = action.get("API_name", "Cardiac Disease Screening") if action else "Cardiac Disease Screening"
-        print(f"  最终使用的 API: {api_name}")
-        
-        # 调用Expert
-        print("\n[Step 3] 调用Expert CDS分类模型...")
-        worker_name = API_NAME_TO_WORKER.get(api_name)
-        expert_result = self.expert_client.call_cds(
-            worker_name, image_2ch, image_4ch, image_sa, **kwargs
-        )
-        
-        # 第二次Agent调用（传入第一次响应以构建正确对话历史）
-        full_response, final_value = self._two_turn_call(question, agent_images, api_name, expert_result, first_response)
-        
-        if not session_id:
-            cleanup_temp_files(agent_images)
-        
-        pred_class = expert_result.get("pred_class", -1)
-        class_name = self.CC_CLASSES.get(pred_class, f"Unknown ({pred_class})")
-        
-        return {
-            "question": question,
-            "api_name": api_name,
-            "prediction": class_name,
-            "expert_result": expert_result,
-            "final_answer": final_value,
-            "frame_info": all_frame_info,
-            "session_id": session_id,
-        }
-    
-    # ============ NICMS分类请求（带自动序列识别） ============
-    def process_nicms_auto(self, question: str, volume_paths: List[str],
-                                        api_key: str = None, engine: str = "gpt-4o",
-                                        base_url: str = None, session_id: str = None, **kwargs) -> Dict:
-        """处理NICMS分类请求 - 自动序列识别版（保留兼容性，内部调用process_classification_auto）"""
-        # 现在统一使用 process_classification_auto，让 Agent 自己决定 API
-        return self.process_classification_auto(question, volume_paths, api_key, engine, base_url, session_id, **kwargs)
-    
-    def process_nicms_auto_legacy(self, question: str, volume_paths: List[str],
-                                        api_key: str = None, engine: str = "gpt-4o",
-                                        base_url: str = None, session_id: str = None, **kwargs) -> Dict:
-        """处理NICMS分类请求 - 自动序列识别版（旧版本，强制使用NICMS分类）"""
-        print("\n" + "="*60)
-        print("NICMS分类任务（自动序列识别）")
-        print("="*60)
-        
-        # 并行序列识别
-        id_results = self.seq_identifier.identify_parallel(
-            volume_paths, api_key, engine, base_url, session_id
-        )
-        
-        # 匹配所需模态
-        matched = self.seq_identifier.match_modalities(id_results, ["4ch", "sa", "lge"])
-        
-        if len(matched) < 3:
-            missing = [m for m in ["4ch", "sa", "lge"] if m not in matched]
-            return {
-                "error": f"缺少必需的模态: {missing}",
-                "identified": id_results,
-                "matched": matched,
-                "session_id": session_id,
-            }
-        
-        return self.process_nicms_request(
-            question=question,
-            image_4ch=matched["4ch"],
-            image_sa=matched["sa"],
-            image_lge_sa=matched["lge"],
-            session_id=session_id,
-            **kwargs
-        )
-    
-    def process_nicms_request(self, question: str, image_4ch: str,
-                                           image_sa: str, image_lge_sa: str, 
-                                           session_id: str = None, **kwargs) -> Dict:
-        """处理NICMS分类请求（已知模态）"""
-        print("\n" + "="*60)
-        print("NICMS分类任务处理流程")
-        print("="*60)
-        
-        all_frame_info = []
-        agent_images = []
-        for path in [image_sa, image_4ch, image_lge_sa]:
-            if os.path.exists(path):
-                frames, frame_info = extract_frames_from_volume(
-                    path, num_frames=1,
-                    session_id=session_id, save_to_cache=(session_id is not None)
-                )
-                agent_images.extend(frames)
-                all_frame_info.append(frame_info)
-                
-                if session_id:
-                    session_mgr = get_session_manager()
-                    session_mgr.add_frames(session_id, frame_info)
-        
-        # 注意：chat 方法会自动根据图片数量添加正确数量的 <image> token
-        print("\n[Agent] 第一次调用...")
-        print(f"  图片数量: {len(agent_images)}")
-        first_response, action = self.agent_client.chat(question, agent_images)
-        
-        api_name = action.get("API_name", "Non-ischemic Cardiomyopathy Subclassification") if action else "Non-ischemic Cardiomyopathy Subclassification"
-        
-        print("\n[Expert] 调用NICMS分类模型...")
-        worker_name = API_NAME_TO_WORKER.get(api_name)
-        expert_result = self.expert_client.call_nicms(
-            worker_name, image_4ch, image_sa, image_lge_sa, **kwargs
-        )
-        
-        # 第二次Agent调用（传入第一次响应以构建正确对话历史）
-        full_response, final_value = self._two_turn_call(question, agent_images, api_name, expert_result, first_response)
-        
-        if not session_id:
-            cleanup_temp_files(agent_images)
-        
-        pred_class = expert_result.get("pred_class", -1)
-        class_name = self.NCC_CLASSES.get(pred_class, f"Unknown ({pred_class})")
-        
-        return {
-            "question": question,
-            "api_name": api_name,
-            "prediction": class_name,
-            "expert_result": expert_result,
-            "final_answer": final_value,
-            "frame_info": all_frame_info,
-            "session_id": session_id,
-        }
-    
-    # ============ 医学报告生成（带自动序列识别） ============
-    def process_metrics_auto(self, question: str, volume_paths: List[str],
-                            api_key: str = None, engine: str = "gpt-4o",
-                            base_url: str = None, session_id: str = None, **kwargs) -> Dict:
-        """
-        处理医学报告生成请求 - Agent自动决定API版本
-        
-        流程：
-        1. 并行序列识别
-        2. 提取代表帧发送给Agent
-        3. Agent决定API
-        4. 根据API检查所需模态
-        5. 调用Expert
-        """
-        print("\n" + "="*60)
-        print("医学报告生成任务（Agent自动决定API）")
-        print("="*60)
-        
-        # Step 1: 并行序列识别
-        print("\n[Step 1] 并行序列识别...")
-        id_results = self.seq_identifier.identify_parallel(
-            volume_paths, api_key, engine, base_url, session_id
-        )
-        
-        print(f"\n  识别结果:")
-        for path, modality in id_results.items():
-            print(f"    {os.path.basename(path)}: {modality}")
-        
-        # Step 2: 提取所有图像的代表帧
-        print("\n[Step 2] 提取代表帧...")
-        all_frame_info = []
-        agent_images = []
-        
-        for path, modality in id_results.items():
-            if os.path.exists(path):
-                frames, frame_info = extract_frames_from_volume(
-                    path, num_frames=1,
-                    session_id=session_id, save_to_cache=(session_id is not None)
-                )
-                agent_images.extend(frames)
-                all_frame_info.append(frame_info)
-                
-                if session_id:
-                    session_mgr = get_session_manager()
-                    session_mgr.add_frames(session_id, frame_info)
-        
-        print(f"  提取了 {len(agent_images)} 张代表帧")
-        
-        # Step 3: 调用Agent，让Agent决定API
-        print("\n[Step 3] 调用Agent决定API...")
-        print(f"  问题: {question[:100]}..." if len(question) > 100 else f"  问题: {question}")
-        first_response, action = self.agent_client.chat(question, agent_images)
-        
-        print(f"\n[Agent 第一轮返回]")
-        print(f"  Action: {action}")
-        print(f"  Response (前200字符): {first_response[:200]}..." if len(first_response) > 200 else f"  Response: {first_response}")
-        
-        # Step 4: 解析Agent返回的API
-        api_name = None
-        if action and "API_name" in action:
-            api_name = action.get("API_name")
-        
-        # 报告生成相关的API — 必须模态 + 可选模态
-        MRG_REQUIRED = ["4ch", "sa"]
-        MRG_OPTIONAL = ["2ch", "lge"]
-        
-        # 默认使用医学报告生成
-        if api_name != "Medical Report Generation":
-            print(f"  Agent返回的API '{api_name}' 不是报告生成API，使用默认: Medical Report Generation")
-            api_name = "Medical Report Generation"
-        
-        print(f"\n[Step 4] Agent决定使用API: {api_name}")
-        print(f"  必须模态: {MRG_REQUIRED}")
-        print(f"  可选模态: {MRG_OPTIONAL}")
-        
-        # Step 5: 匹配模态（必须 + 可选）
-        print("\n[Step 5] 匹配模态...")
-        matched = self.seq_identifier.match_modalities(id_results, MRG_REQUIRED)
-        
-        if len(matched) < len(MRG_REQUIRED):
-            missing = [m for m in MRG_REQUIRED if m not in matched]
-            return {
-                "error": f"缺少必需的模态: {missing}",
-                "api_name": api_name,
-                "required_modalities": MRG_REQUIRED,
-                "identified": id_results,
-                "matched": matched,
-                "session_id": session_id,
-                "agent_response": first_response,
-            }
-        
-        optional_matched = self.seq_identifier.match_modalities(id_results, MRG_OPTIONAL)
-        matched.update(optional_matched)
-        
-        print(f"  模态匹配成功!")
-        for mod, path in matched.items():
-            is_opt = mod in MRG_OPTIONAL
-            print(f"    {mod}: {os.path.basename(path)}" + (" (可选)" if is_opt else ""))
-        
-        # Step 6: 调用Expert（新 MRG 编排: metrics + CDS + NICMS）
-        print(f"\n[Step 6] 调用Expert: {api_name}...")
-        worker_name = API_NAME_TO_WORKER.get(api_name)
-        expert_result = self.expert_client.call_mrg(
-            worker_name, matched["4ch"], matched["sa"],
-            image_2ch=matched.get("2ch"),
-            image_lge_sa=matched.get("lge"),
-            **kwargs
-        )
-        
-        # 提取 metrics 用于返回
-        metrics = expert_result.get("metrics", {})
-        segmentation_4ch = expert_result.get("segmentation_4ch", {})
-        segmentation_sa = expert_result.get("segmentation_sa", {})
-        
-        print(f"\n[Expert 返回]")
-        print(f"  error_code: {expert_result.get('error_code')}")
-        if metrics:
-            print(f"  LV_EF: {metrics.get('LV_EF')}")
-            print(f"  RV_EF: {metrics.get('RV_EF')}")
-            print(f"  指标数量: {len(metrics)}")
-        cds_result = expert_result.get("cds_result")
-        if cds_result:
-            print(f"  CDS: {cds_result.get('class_name')} (class={cds_result.get('pred_class')})")
-        nicms_result = expert_result.get("nicms_result")
-        if nicms_result:
-            print(f"  NICMS: {nicms_result.get('class_name')} (class={nicms_result.get('pred_class')})")
-        
-        # Step 7: 第二次Agent调用（总结结果）
-        print("\n[Step 7] 第二次Agent调用（总结结果）...")
-        full_response, final_value = self._two_turn_call(question, agent_images, api_name, expert_result, first_response)
-        
-        if not session_id:
-            cleanup_temp_files(agent_images)
-        
-        report_data = None
-        if metrics:
-            report_data = self._build_report_data(
-                metrics, segmentation_4ch, segmentation_sa,
-                cds_result=cds_result, nicms_result=nicms_result,
-            )
-        
-        result = {
-            "question": question,
-            "api_name": api_name,
-            "expert_result": expert_result,
-            "final_answer": final_value,
-            "frame_info": all_frame_info,
-            "detected_sequences": [{"path": p, "modality": m} for p, m in id_results.items()],
-            "session_id": session_id,
-            "metrics": metrics,
-            "report_data": report_data,
-            "segmentation_4ch": segmentation_4ch,
-            "segmentation_sa": segmentation_sa,
-        }
-        if cds_result:
-            result["cds_result"] = cds_result
-            result["prediction"] = cds_result.get("class_name")
-        if nicms_result:
-            result["nicms_result"] = nicms_result
-        return result
-    
-    def process_metrics_request(self, question: str, image_4ch: str, image_sa: str, 
-                                image_2ch: str = None, image_lge_sa: str = None,
-                                session_id: str = None, **kwargs) -> Dict:
-        """处理医学报告生成请求（已知模态）"""
-        print("\n" + "="*60)
-        print("医学报告生成任务处理流程")
-        print("="*60)
-        
-        all_frame_info = []
-        agent_images = []
-        all_paths = [image_sa, image_4ch]
-        if image_2ch:
-            all_paths.append(image_2ch)
-        if image_lge_sa:
-            all_paths.append(image_lge_sa)
-        
-        for path in all_paths:
-            if path and os.path.exists(path):
-                frames, frame_info = extract_frames_from_volume(
-                    path, num_frames=1,
-                    session_id=session_id, save_to_cache=(session_id is not None)
-                )
-                agent_images.extend(frames)
-                all_frame_info.append(frame_info)
-                
-                if session_id:
-                    session_mgr = get_session_manager()
-                    session_mgr.add_frames(session_id, frame_info)
-        
-        print("\n[Agent] 第一次调用...")
-        print(f"  图片数量: {len(agent_images)}")
-        first_response, action = self.agent_client.chat(question, agent_images)
-        
-        api_name = action.get("API_name", "Medical Report Generation") if action else "Medical Report Generation"
-        
-        print("\n[Expert] 调用医学报告生成模型（编排: metrics + CDS + NICMS）...")
-        worker_name = API_NAME_TO_WORKER.get(api_name)
-        expert_result = self.expert_client.call_mrg(
-            worker_name, image_4ch, image_sa,
-            image_2ch=image_2ch, image_lge_sa=image_lge_sa,
-            **kwargs
-        )
-        
-        metrics = expert_result.get("metrics", {})
-        segmentation_4ch = expert_result.get("segmentation_4ch", {})
-        segmentation_sa = expert_result.get("segmentation_sa", {})
-        
-        print(f"\n[Expert] 返回结果:")
-        print(f"  error_code: {expert_result.get('error_code')}")
-        if metrics:
-            print(f"  LV_EF: {metrics.get('LV_EF')}")
-            print(f"  RV_EF: {metrics.get('RV_EF')}")
-            print(f"  指标数量: {len(metrics)}")
-        cds_res = expert_result.get("cds_result")
-        if cds_res:
-            print(f"  CDS: {cds_res.get('class_name')}")
-        nicms_res = expert_result.get("nicms_result")
-        if nicms_res:
-            print(f"  NICMS: {nicms_res.get('class_name')}")
-        
-        full_response, final_value = self._two_turn_call(question, agent_images, api_name, expert_result, first_response)
-        
-        if not session_id:
-            cleanup_temp_files(agent_images)
-        
-        report_data = None
-        if metrics:
-            report_data = self._build_report_data(
-                metrics, segmentation_4ch, segmentation_sa,
-                cds_result=cds_res, nicms_result=nicms_res,
-            )
-        
-        download_urls = []
-        if session_id and metrics:
-            reports_dir = os.path.join(CACHE_RESULTS_DIR, session_id, "reports")
-            os.makedirs(reports_dir, exist_ok=True)
-            pdf_path = os.path.join(reports_dir, "cardiac_report.pdf")
-            try:
-                generated_report = generate_cardiac_report_pdf(
-                    metrics=metrics, report_data=report_data, output_path=pdf_path,
-                )
-                if generated_report and os.path.exists(generated_report):
-                    report_filename = os.path.basename(generated_report)
-                    is_pdf = report_filename.endswith('.pdf')
-                    download_urls.append({
-                        "type": "report_pdf",
-                        "label": f"Cardiac Report ({'PDF' if is_pdf else 'TXT'})",
-                        "filename": report_filename,
-                        "url": f"/api/download/{session_id}/reports/{report_filename}",
-                    })
-            except Exception as pdf_err:
-                print(f"报告生成失败: {pdf_err}")
-        
-        result = {
-            "question": question,
-            "api_name": api_name,
-            "expert_result": expert_result,
-            "final_answer": final_value,
-            "frame_info": all_frame_info,
-            "session_id": session_id,
-            "metrics": metrics,
-            "report_data": report_data,
-            "segmentation_4ch": segmentation_4ch,
-            "segmentation_sa": segmentation_sa,
-            "download_urls": download_urls,
-        }
-        if cds_res:
-            result["cds_result"] = cds_res
-            result["prediction"] = cds_res.get("class_name")
-        if nicms_res:
-            result["nicms_result"] = nicms_res
-        return result
     
     def _build_report_data(self, metrics: Dict, seg_4ch: Dict, seg_sa: Dict,
                            cds_result: Dict = None, nicms_result: Dict = None) -> Dict:
@@ -1321,6 +464,7 @@ class HeartMRIAgent:
             Tuple[List[str], Dict]: (帧文件路径列表, 帧信息字典)
         """
         print(f"    [cine SA特殊抽帧] {os.path.basename(volume_path)}")
+        import SimpleITK as sitk
         
         # 获取slice_num信息
         slice_num = None
@@ -1976,76 +1120,115 @@ class HeartMRIAgent:
         
         return result
     
-    # ============ Agent VQA ============
-    def process_agent_vqa(self, question: str, image_paths: List[str] = None,
-                          volume_paths: List[str] = None,
-                          session_id: str = None, **kwargs) -> Dict:
+    # ============ 通用处理接口（按模态分发） ============
+    def process_request(self, question: str, volume_paths: List[str] = None,
+                       task_type: str = "mr", session_id: str = None,
+                       image_paths: List[str] = None, **kwargs) -> Dict:
         """
-        Agent VQA模式 - Agent直接回答图像问题，不调用外部Worker
-        
-        类似于SeqAnalysis的"直接处理"方式，但不需要单独的worker。
-        Agent直接看图回答问题（如瓣膜分析、影像发现、结构观察等）。
-        
-        支持两种输入:
-        1. image_paths: 直接提供PNG图像路径
-        2. volume_paths: 提供volume数据（DICOM/NIfTI），自动抽帧后传给Agent
-        
-        流程:
-        1. 准备图像（直接使用PNG 或 从volume抽帧）
-        2. 调用Agent分析图像+问题（单轮调用）
-        3. 解析Agent响应，直接返回value（不做第二轮调用，不调用Worker）
-        
+        通用请求处理接口 — 按影像模态分发
+
         Args:
             question: 用户问题
-            image_paths: PNG图像路径列表（直接使用）
-            volume_paths: volume数据路径列表（需要抽帧）
+            volume_paths: 上传的文件路径列表（医学影像）
+            task_type: 影像模态 (mr / ct / us / ecg)
             session_id: 会话ID
-            **kwargs: 其他参数（api_key, engine, base_url等）
-            
-        Returns:
-            VQA结果，包含final_answer
+            image_paths: PNG图像路径列表
+            **kwargs: api_key, engine, base_url 等
+        """
+        modality = (task_type or "mr").lower()
+        print(f"\n[process_request] modality={modality}")
+        print(f"  问题: {question[:100]}..." if len(question) > 100 else f"  问题: {question}")
+        print(f"  会话ID: {session_id}")
+        print(f"  volume数量: {len(volume_paths) if volume_paths else 0}")
+        print(f"  图像数量: {len(image_paths) if image_paths else 0}")
+
+        dispatch = {
+            "mr": self.process_mr,
+            "ct": self.process_ct,
+            "us": self.process_us,
+            "ecg": self.process_ecg,
+        }
+        handler = dispatch.get(modality, self.process_mr)
+        return handler(question, volume_paths=volume_paths, session_id=session_id,
+                       image_paths=image_paths, **kwargs)
+
+    # ============ MR 处理入口 ============
+    def process_mr(self, question: str, volume_paths: List[str] = None,
+                   session_id: str = None, image_paths: List[str] = None,
+                   **kwargs) -> Dict:
+        """
+        Cardiac MR 统一入口
+
+        路由逻辑:
+          1. 有 volume → process_unified_auto（Agent 序列识别 → 专家模型）
+          2. 仅 PNG 图像 → Agent 直接分析图像并回答
+          3. 纯文本 → Agent 决策（MIR / VQA）
         """
         print("\n" + "="*60)
-        print("Agent VQA模式（直接问答，无需Worker）")
+        print("Cardiac MR 处理流程")
         print("="*60)
-        
-        valid_images = []
+
+        # --- 有医学影像 volume ---
+        if volume_paths and len(volume_paths) > 0:
+            print(f"\n  → 统一Agent驱动流程 ({len(volume_paths)} 个volume)")
+            return self.process_unified_auto(question, volume_paths,
+                                             session_id=session_id, **kwargs)
+
+        # --- 仅 PNG 图像（无 volume）---
+        if image_paths and len(image_paths) > 0:
+            print(f"\n  → PNG图像分析模式 ({len(image_paths)} 张)")
+            return self._handle_image_chat(question, image_paths,
+                                           session_id=session_id, **kwargs)
+
+        # --- 纯文本（无任何文件）---
+        print(f"\n  → 纯文本问答，调用Agent判断API...")
+        return self._handle_text_only(question, session_id=session_id, **kwargs)
+
+    # ============ CT / US / ECG 占位 ============
+    def process_ct(self, question: str, **kwargs) -> Dict:
+        """Cardiac CT — 功能开发中"""
+        return {
+            "question": question,
+            "api_name": "CT (Coming Soon)",
+            "final_answer": "Cardiac CT analysis is not yet available. Please stay tuned.",
+            "session_id": kwargs.get("session_id"),
+        }
+
+    def process_us(self, question: str, **kwargs) -> Dict:
+        """Cardiac Ultrasound — 功能开发中"""
+        return {
+            "question": question,
+            "api_name": "US (Coming Soon)",
+            "final_answer": "Cardiac ultrasound analysis is not yet available. Please stay tuned.",
+            "session_id": kwargs.get("session_id"),
+        }
+
+    def process_ecg(self, question: str, **kwargs) -> Dict:
+        """ECG — 功能开发中"""
+        return {
+            "question": question,
+            "api_name": "ECG (Coming Soon)",
+            "final_answer": "ECG analysis is not yet available. Please stay tuned.",
+            "session_id": kwargs.get("session_id"),
+        }
+
+    # ============ 内部辅助：PNG 图像对话 ============
+    def _handle_image_chat(self, question: str, image_paths: List[str],
+                           session_id: str = None, **kwargs) -> Dict:
+        """Agent 直接分析 PNG/JPG 图像并回答"""
         images_info = []
-        frame_info_list = []
-        
-        # 方式1: 直接使用提供的PNG图像
-        if image_paths:
-            print(f"\n[Step 1] 使用提供的PNG图像 ({len(image_paths)} 张)...")
-            for img_path in image_paths:
-                if os.path.exists(img_path):
-                    valid_images.append(img_path)
-                    images_info.append({
-                        "path": img_path,
-                        "filename": os.path.basename(img_path),
-                        "url": f"/cache/images/{VERSION}/{session_id}/{os.path.basename(img_path)}" if session_id else None,
-                    })
-                    print(f"  ✓ {os.path.basename(img_path)}")
-                else:
-                    print(f"  ✗ {img_path} (文件不存在)")
-        
-        # 方式2: 从volume数据抽帧
-        if volume_paths and not valid_images:
-            print(f"\n[Step 1] 从volume数据抽帧 ({len(volume_paths)} 个volume)...")
-            for vol_path in volume_paths:
-                if os.path.exists(vol_path):
-                    frames, frame_info = extract_frames_from_volume(
-                        vol_path, num_frames=1,
-                        session_id=session_id, save_to_cache=(session_id is not None)
-                    )
-                    valid_images.extend(frames)
-                    frame_info_list.append(frame_info)
-                    
-                    if session_id:
-                        session_mgr = get_session_manager()
-                        session_mgr.add_frames(session_id, frame_info)
-                    
-                    print(f"  ✓ {os.path.basename(vol_path)} → {len(frames)} 帧")
-        
+        valid_images = []
+
+        for img_path in image_paths:
+            if os.path.exists(img_path):
+                valid_images.append(img_path)
+                images_info.append({
+                    "path": img_path,
+                    "filename": os.path.basename(img_path),
+                    "url": (f"/cache/images/{VERSION}/{session_id}/"
+                            f"{os.path.basename(img_path)}") if session_id else None,
+                })
+
         if not valid_images:
             return {
                 "question": question,
@@ -2053,318 +1236,66 @@ class HeartMRIAgent:
                 "error": "没有有效的图像文件",
                 "session_id": session_id,
             }
-        
-        # Step 2: 调用Agent（单轮，直接回答）
-        print(f"\n[Step 2] 调用Agent直接分析 ({len(valid_images)} 张图像)...")
-        print(f"  问题: {question[:100]}..." if len(question) > 100 else f"  问题: {question}")
-        
+
         response, action = self.agent_client.chat(question, valid_images)
-        
-        # 解析Agent的直接回答
         final_value = self.agent_client._parse_value(response)
-        
-        # 检查Agent是否真的返回了空actions（期望行为）
-        is_direct_answer = False
-        if action and action.get("no_api"):
-            is_direct_answer = True
-            print(f"\n[Step 3] Agent确认直接回答（actions为空）")
-        elif action is None:
-            is_direct_answer = True
-            print(f"\n[Step 3] Agent未返回action，使用直接回答")
-        elif action and action.get("API_name") is None:
-            is_direct_answer = True
-            print(f"\n[Step 3] Agent返回API_name为None，使用直接回答")
-        else:
-            # Agent返回了API，但我们仍然使用直接回答（VQA模式下不调用Worker）
-            api_returned = action.get("API_name", "unknown") if action else "unknown"
-            print(f"\n[Step 3] Agent返回了API '{api_returned}'，但VQA模式下忽略，使用直接回答")
-            is_direct_answer = True
-        
-        print(f"\n[结果] Agent VQA直接回答:")
-        print(f"  {final_value[:300]}..." if len(str(final_value)) > 300 else f"  {final_value}")
-        
-        # 如果没有缓存且使用了volume抽帧，清理临时文件
-        if not session_id and volume_paths:
-            cleanup_temp_files(valid_images)
-        
+
         return {
             "question": question,
             "api_name": "Agent VQA",
             "final_answer": final_value,
             "first_response": response,
-            "full_response": response,
-            "action": action,
-            "is_direct_answer": is_direct_answer,
-            "images_info": images_info,
-            "frame_info": frame_info_list,
-            "session_id": session_id,
-        }
-    
-    # ============ 智能对话 ============
-    def process_smart_chat(self, question: str, image_paths: List[str] = None,
-                           session_id: str = None, **kwargs) -> Dict:
-        """
-        智能对话模式 - 根据Agent响应决定是否调用Worker
-        
-        流程:
-        1. 先调用Agent分析问题和图像
-        2. 解析Agent返回的action
-        3. 如果action中有有效的API_name，则调用对应Worker
-        4. 如果没有有效API，则直接返回Agent的响应（Direct Chat）
-        
-        Args:
-            question: 用户问题
-            image_paths: PNG图像路径列表
-            session_id: 会话ID
-            **kwargs: 其他参数
-            
-        Returns:
-            对话结果
-        """
-        print("\n" + "="*60)
-        print("智能对话模式")
-        print("="*60)
-        
-        images_info = []
-        valid_images = []
-        
-        # 如果有图像，验证并收集图像信息
-        if image_paths and len(image_paths) > 0:
-            print(f"\n[Step 1] 处理 {len(image_paths)} 张图像...")
-            
-            for img_path in image_paths:
-                if os.path.exists(img_path):
-                    valid_images.append(img_path)
-                    images_info.append({
-                        "path": img_path,
-                        "filename": os.path.basename(img_path),
-                        "url": f"/cache/images/{VERSION}/{session_id}/{os.path.basename(img_path)}" if session_id else None,
-                    })
-                    print(f"  ✓ {os.path.basename(img_path)}")
-                else:
-                    print(f"  ✗ {img_path} (文件不存在)")
-            
-            if not valid_images:
-                return {
-                    "question": question,
-                    "api_name": "Direct Chat",
-                    "error": "没有有效的图像文件",
-                    "session_id": session_id,
-                }
-        
-        # 注意：chat 方法会自动根据图片数量添加正确数量的 <image> token
-        # Step 2: 调用Agent分析
-        print(f"\n[Step 2] 调用Agent分析...")
-        if valid_images:
-            print(f"  图像数量: {len(valid_images)}")
-        
-        response, action = self.agent_client.chat(question, valid_images if valid_images else None)
-        
-        # 检查Agent返回的action，区分VQA和API调用
-        # Step 3: 检查Agent返回的action是否有有效的API
-        has_valid_api = False
-        api_name = None
-        is_agent_vqa = False
-        
-        if action and action.get("no_api"):
-            # Agent明确返回空actions，这是Agent VQA模式
-            is_agent_vqa = True
-            api_name = "Agent VQA"
-            print(f"\n[Step 3] Agent返回空actions，使用Agent VQA模式（直接回答）")
-        elif action and "API_name" in action:
-            api_name = action.get("API_name")
-            if api_name and api_name in API_NAME_TO_WORKER:
-                has_valid_api = True
-                print(f"\n[Step 3] Agent返回有效API: {api_name}")
-            elif api_name is None:
-                is_agent_vqa = True
-                api_name = "Agent VQA"
-                print(f"\n[Step 3] Agent返回API_name为None，使用Agent VQA模式")
-            else:
-                print(f"\n[Step 3] Agent返回的API无效或不需要Worker: {api_name}")
-        else:
-            print(f"\n[Step 3] Agent未返回API调用，进入Direct Chat模式")
-        
-        # Step 4: 根据是否有有效API决定处理方式
-        if has_valid_api:
-            # 有有效API，但对于PNG图像，可能没有对应的volume数据
-            # 这种情况下仍然使用Direct Chat / Agent VQA
-            print(f"  注意: 检测到API调用 '{api_name}'，但当前只有PNG图像，无法调用Worker")
-            print(f"  将使用Agent的直接响应（Agent VQA模式）")
-            has_valid_api = False
-        
-        # 直接返回Agent响应（Agent VQA / Direct Chat）
-        final_value = self.agent_client._parse_value(response)
-        
-        result_mode = "Agent VQA" if is_agent_vqa else "Direct Chat"
-        print(f"\n[结果] {result_mode}模式")
-        print(f"  Agent响应: {final_value[:100]}..." if len(final_value) > 100 else f"  Agent响应: {final_value}")
-        
-        return {
-            "question": question,
-            "api_name": api_name if api_name else "Direct Chat",
-            "final_answer": final_value,
-            "first_response": response,
-            "full_response": response,
-            "action": action,
-            "has_valid_api": has_valid_api,
-            "is_agent_vqa": is_agent_vqa,
             "images_info": images_info,
             "session_id": session_id,
         }
-    
-    # ============ MIR (Medical Info Retrieval) ============
-    def process_mir_request(self, question: str, first_response: str = None, **kwargs) -> Dict:
-        """处理 Medical Info Retrieval 请求
-        
-        Args:
-            question: 用户问题
-            first_response: 可选，已有的Agent第一轮响应（避免重复调用Agent）
-            **kwargs: 其他参数
-        """
-        print("\n" + "="*60)
-        print("MIR (Medical Info Retrieval) 任务处理流程")
-        print("="*60)
-        
-        if first_response is None:
-            print("\n[Agent] 第一次调用...")
-            first_response, action = self.agent_client.chat(question, None)
-        else:
-            print("\n[Agent] 使用已有的第一轮响应（跳过重复调用）")
-        
-        api_name = "Medical Info Retrieval"
-        
-        print("\n[Expert] 调用MIR模型...")
-        worker_name = API_NAME_TO_WORKER.get(api_name)
-        expert_result = self.expert_client.call_mir(worker_name, question, **kwargs)
-        
-        mir_answer = expert_result.get("text", "")
-        
-        return {
-            "question": question,
-            "api_name": api_name,
-            "expert_result": expert_result,
-            "final_answer": mir_answer,
-            "first_response": first_response,
-        }
-    
-    # ============ 序列分析（单次调用） ============
-    def process_seq_request(self, question: str, volume_path: str, 
-                           session_id: str = None, **kwargs) -> Dict:
-        """处理Sequence Analysis请求（单次调用）"""
-        print("\n" + "="*60)
-        print("Sequence Analysis任务处理流程")
-        print("="*60)
-        
-        result = self.seq_identifier.identify_single(
-            volume_path, 
-            kwargs.get("api_key"),
-            kwargs.get("engine", "gpt-4o"),
-            kwargs.get("base_url"),
-            session_id,
-        )
-        
-        return {
-            "question": question,
-            "api_name": "Sequence Analysis",
-            "detected_sequences": result.get("detected_sequences", []),
-            "modality": result.get("modality"),
-            "frame_info": [result.get("frame_info")] if result.get("frame_info") else [],
-            "session_id": session_id,
-        }
-    
-    # ============ 通用处理接口 ============
-    def process_request(self, question: str, volume_paths: List[str] = None,
-                       task_type: str = None, session_id: str = None, 
-                       image_paths: List[str] = None, **kwargs) -> Dict:
-        """
-        通用请求处理接口
-        
-        当有医学影像volume时，统一使用Agent驱动流程:
-          1. Agent序列识别 → 智能抽帧 → 模态排序 → Agent决定API → Expert调用
-        
-        Args:
-            question: 用户问题
-            volume_paths: 上传的文件路径列表（医学影像）
-            task_type: 任务类型，volume上传统一走unified流程，
-                       仅 rag/agent_vqa/direct_chat 保留显式指定
-            session_id: 会话ID（用于缓存）
-            image_paths: PNG图像路径列表（用于智能对话）
-            **kwargs: 其他参数（api_key, engine, base_url等）
-        """
-        print(f"\n[process_request]")
-        print(f"  问题: {question[:100]}..." if len(question) > 100 else f"  问题: {question}")
-        print(f"  会话ID: {session_id}")
-        print(f"  volume数量: {len(volume_paths) if volume_paths else 0}")
-        print(f"  图像数量: {len(image_paths) if image_paths else 0}")
-        print(f"  指定任务: {task_type}")
-        
-        # 显式指定 agent_vqa
-        if task_type == "agent_vqa":
-            print(f"\n  → 显式Agent VQA模式")
-            return self.process_agent_vqa(
-                question, image_paths=image_paths, volume_paths=volume_paths,
-                session_id=session_id, **kwargs
-            )
-        
-        # PNG图像（无医学影像volume）→ 智能对话模式
-        if image_paths and len(image_paths) > 0 and (not volume_paths or len(volume_paths) == 0):
-            print(f"\n  → 检测到PNG图像，使用智能对话模式")
-            return self.process_smart_chat(question, image_paths, session_id=session_id, **kwargs)
-        
-        # 有医学影像volume → 统一Agent驱动流程
-        if volume_paths and len(volume_paths) > 0:
-            print(f"\n  → 统一Agent驱动流程 ({len(volume_paths)} 个volume)")
-            return self.process_unified_auto(question, volume_paths, session_id=session_id, **kwargs)
-        
-        # 显式 direct_chat/smart_chat
-        if task_type in ("direct_chat", "smart_chat"):
-            return self.process_smart_chat(question, image_paths, session_id=session_id, **kwargs)
-        
-        # 显式 rag
-        if task_type == "rag":
-            print(f"\n  → 显式MIR模式")
-            result = self.process_mir_request(question, **kwargs)
-            result["session_id"] = session_id
-            return result
-        
-        # 无文件上传 → Agent驱动决策
-        print(f"\n  → 无文件上传，调用Agent判断API...")
+
+    # ============ 内部辅助：纯文本问答 ============
+    def _handle_text_only(self, question: str, session_id: str = None,
+                          **kwargs) -> Dict:
+        """无文件上传时，Agent 自行决策（MIR 或 VQA 直答）"""
         first_response, action = self.agent_client.chat(question, None)
-        
+
         api_name = None
         if action and action.get("API_name"):
             api_name = action["API_name"]
             print(f"  Agent选择API: {api_name}")
         elif action and action.get("no_api"):
-            print(f"  Agent返回空actions → Agent VQA模式")
+            print(f"  Agent返回空actions → VQA模式")
         else:
-            print(f"  Agent未返回有效API → Agent VQA模式")
-        
+            print(f"  Agent未返回有效API → VQA模式")
+
         if api_name and api_name in API_NAME_TO_WORKER:
             worker_type = API_NAME_TO_WORKER.get(api_name)
             if worker_type == "MIRWorker":
-                print(f"  → Agent选择MIR，执行Medical Info Retrieval")
-                result = self.process_mir_request(question, first_response=first_response, **kwargs)
-                result["session_id"] = session_id
-                return result
+                print(f"  → Agent选择MIR")
+                worker_name = API_NAME_TO_WORKER.get(api_name)
+                expert_result = self.expert_client.call_mir(
+                    worker_name, question, **kwargs)
+                return {
+                    "question": question,
+                    "api_name": api_name,
+                    "expert_result": expert_result,
+                    "final_answer": expert_result.get("text", ""),
+                    "first_response": first_response,
+                    "session_id": session_id,
+                }
             else:
                 print(f"  → API '{api_name}' 需要图像文件")
                 return {
                     "question": question,
                     "api_name": api_name,
-                    "final_answer": f"The API '{api_name}' requires image files. Please upload relevant cardiac MRI images.",
+                    "final_answer": (f"The API '{api_name}' requires image files. "
+                                     "Please upload relevant cardiac MRI images."),
                     "first_response": first_response,
                     "session_id": session_id,
                 }
-        else:
-            # Agent VQA — 直接回答
-            final_value = self.agent_client._parse_value(first_response)
-            return {
-                "question": question,
-                "api_name": "Agent VQA",
-                "final_answer": final_value,
-                "first_response": first_response,
-                "session_id": session_id,
-            }
+
+        final_value = self.agent_client._parse_value(first_response)
+        return {
+            "question": question,
+            "api_name": "Agent VQA",
+            "final_answer": final_value,
+            "first_response": first_response,
+            "session_id": session_id,
+        }
 
