@@ -21,28 +21,19 @@ The system orchestrates a fine-tuned LLaVA-based agent with multiple expert mode
 
 Upload cardiac MRI and let the agent automatically identify sequences, select expert segmentation models, and return labeled results.
 
-<video controls>
-  <source src="demo/seg.mp4" type="video/mp4">
-  您的浏览器不支持视频标签。
-</video>
+<video src="demo/seg.mp4" controls width="100%"></video>
 
 ### Disease Screening & Classification
 
 The agent dispatches cardiac disease screening (CDS) and non-ischemic cardiomyopathy subtyping (NICMS) expert workers for automated diagnosis.
 
-<video controls>
-  <source src="demo/cls.mp4" type="video/mp4">
-  您的浏览器不支持视频标签。
-</video>
+<video src="demo/cls.mp4" controls width="100%"></video>
 
 ### Report Generation
 
 End-to-end pipeline: from raw DICOM/NIfTI uploads to a downloadable PDF report with cardiac metrics, classification results, and clinical evaluation.
 
-<video controls>
-  <source src="demo/mrg.mp4" type="video/mp4">
-  您的浏览器不支持视频标签。
-</video>
+<video src="demo/mrg.mp4" controls width="100%"></video>
 
 ---
 
