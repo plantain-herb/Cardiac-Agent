@@ -21,7 +21,7 @@ The system orchestrates a fine-tuned LLaVA-based agent with multiple expert mode
 
 Upload cardiac MRI and let the agent automatically identify sequences, select expert segmentation models, and return labeled results.
 
-<video src="[demo/seg.mp4](https://github.com/plantain-herb/Cardiac-Agent/blame/main/demo/cls.mp4)" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/5d04754b-ec7d-4e71-b520-8c49df9affbe" controls width="100%"></video>
 
 ### Disease Screening & Classification
 
