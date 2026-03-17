@@ -27,13 +27,13 @@ Upload cardiac MRI and let the agent automatically identify sequences, select ex
 
 The agent dispatches cardiac disease screening (CDS) and non-ischemic cardiomyopathy subtyping (NICMS) expert workers for automated diagnosis.
 
-<video src="demo/cls.mp4" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/53288ada-6634-4a6a-8393-3e9038de78ac" controls width="100%"></video>
 
 ### Report Generation
 
 End-to-end pipeline: from raw DICOM/NIfTI uploads to a downloadable PDF report with cardiac metrics, classification results, and clinical evaluation.
 
-<video src="demo/mrg.mp4" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/20d3b028-5c31-4e5e-abd7-107a8b925409" controls width="100%"></video>
 
 ---
 
