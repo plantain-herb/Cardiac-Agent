@@ -21,13 +21,13 @@ The system orchestrates a fine-tuned LLaVA-based agent with multiple expert mode
 
 Upload cardiac MRI and let the agent automatically identify sequences, select expert segmentation models, and return labeled results.
 
-<video src="https://github.com/user-attachments/assets/5d04754b-ec7d-4e71-b520-8c49df9affbe" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/53288ada-6634-4a6a-8393-3e9038de78ac" controls width="100%"></video>
 
 ### Disease Screening & Classification
 
 The agent dispatches cardiac disease screening (CDS) and non-ischemic cardiomyopathy subtyping (NICMS) expert workers for automated diagnosis.
 
-<video src="https://github.com/user-attachments/assets/53288ada-6634-4a6a-8393-3e9038de78ac" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/2f60b850-68dc-41ae-a1f7-590c9968bc15" controls width="100%"></video>
 
 ### Report Generation
 
