@@ -20,6 +20,10 @@ try:
 except Exception:
     raise
 
+_EXAMPLE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_EXAMPLE_DIR, "..", "..", ".."))
+_WEIGHTS_DIR = os.path.join(_PROJECT_ROOT, "weights")
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Test Heart Segmentation")
@@ -29,8 +33,16 @@ def parse_args():
     parser.add_argument("--input_path", default="/home/qutaiping/nas/HYH/CINE_2ch", type=str)
     parser.add_argument("--output_path", default="/home/qutaiping/nas/HYH/CINE_2ch_pred", type=str)
     parser.add_argument("--model_path", default=None, type=str)
-    parser.add_argument("--model_file_DY_first", default='/SMMN-Share/data_share/test_data/checkpoints/cine_seg_first_2CH/latest.pth', type=str)
-    parser.add_argument("--model_file_DY_second", default="/SMMN-Share/data_share/test_data/checkpoints/cine_seg_second_2CH/latest.pth", type=str)
+    parser.add_argument(
+        "--model_file_DY_first",
+        default=os.path.join(_WEIGHTS_DIR, "cine_seg_first_2CH", "Cine_2CH_seg1.pth"),
+        type=str,
+    )
+    parser.add_argument(
+        "--model_file_DY_second",
+        default=os.path.join(_WEIGHTS_DIR, "cine_seg_second_2CH", "Cine_2CH_seg2.pth"),
+        type=str,
+    )
     parser.add_argument("--network_file_DY_first", default="train/config/seg_mrdy_stage1.py", type=str)
     parser.add_argument("--network_file_DY_second", type=str, default="train/config/seg_mrdy_stage2.py")
     parser.add_argument("--config_file", type=str, default='example/heart_seg.yaml')

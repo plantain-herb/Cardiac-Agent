@@ -16,7 +16,9 @@ try:
 except Exception:
     raise
 
-
+_EXAMPLE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_EXAMPLE_DIR, "..", "..", ".."))
+_WEIGHTS_DIR = os.path.join(_PROJECT_ROOT, "weights")
 def parse_args():
     parser = argparse.ArgumentParser(description="Test Heart Segmentation")
     parser.add_argument("--gpu", default=2, type=int)
@@ -25,9 +27,21 @@ def parse_args():
     parser.add_argument("--input_path", default="/home/qutaiping/agent_expert/MMedAgent/api_result/seg/test_4ch", type=str)
     parser.add_argument("--output_path", default="/home/qutaiping/agent_expert/MMedAgent/api_result/seg/test_4ch_pred", type=str)
     parser.add_argument("--model_path", default=None, type=str)
-    parser.add_argument("--model_file_DY_first", default='/home/qutaiping/agent_expert/weights/cine_seg_first_4CH/epoch_40.pth', type=str)
-    parser.add_argument("--model_file_DY_secondL", default="/home/qutaiping/agent_expert/weights/cine_seg_second_4CH_L/latest.pth", type=str)
-    parser.add_argument("--model_file_DY_secondR", default="/home/qutaiping/agent_expert/weights/cine_seg_second_4CH_R/latest.pth", type=str)
+    parser.add_argument(
+        "--model_file_DY_first",
+        default=os.path.join(_WEIGHTS_DIR, "cine_seg_first_4CH", "Cine_4CH_seg1.pth"),
+        type=str,
+    )
+    parser.add_argument(
+        "--model_file_DY_secondL",
+        default=os.path.join(_WEIGHTS_DIR, "cine_seg_second_4CH_L", "Cine_4CH_seg2_L.pth"),
+        type=str,
+    )
+    parser.add_argument(
+        "--model_file_DY_secondR",
+        default=os.path.join(_WEIGHTS_DIR, "cine_seg_second_4CH_R", "Cine_4CH_seg2_R.pth"),
+        type=str,
+    )
     parser.add_argument("--network_file_DY_first", default="train/config/seg_mrdy_stage1.py", type=str)
     parser.add_argument("--network_file_DY_secondL", type=str, default="train/config/seg_mrdy_stage2L.py")
     parser.add_argument("--network_file_DY_secondR", type=str, default="train/config/seg_mrdy_stage2R.py")

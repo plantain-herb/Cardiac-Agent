@@ -12,6 +12,10 @@ import SimpleITK as sitk
 from tqdm import tqdm
 import pandas as pd
 
+_EXAMPLE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_EXAMPLE_DIR, "..", "..", ".."))
+_WEIGHTS_DIR = os.path.join(_PROJECT_ROOT, "weights")
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from infer.predictor_cine_class import (
     CineClassificationModel,
@@ -33,7 +37,7 @@ def parse_args():
     )
     parser.add_argument(
         "--model_cls_file", 
-        default='/home/qutaiping/nas/checkpoints/diagnosis_second_refine/epoch_39.pth',
+        default=os.path.join(_WEIGHTS_DIR, "diagnosis_second", "NICMS.pth"),
         type=str,
     )
     parser.add_argument(

@@ -17,6 +17,10 @@ try:
 except Exception:
     raise
 
+_EXAMPLE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_EXAMPLE_DIR, "..", "..", ".."))
+_WEIGHTS_DIR = os.path.join(_PROJECT_ROOT, "weights")
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Test Heart Segmentation")
@@ -32,8 +36,16 @@ def parse_args():
     # parser.add_argument("--output_path", default="/home/qutaiping/nas/ori_data/HNWB/LGE/pred-refine", type=str)
 
     parser.add_argument("--model_path", default=None, type=str)
-    parser.add_argument("--model_file_heart_first", default='/home/qutaiping/nas/checkpoints/first_LGE_seg_refine_agent/latest.pth', type=str)
-    parser.add_argument("--model_file_heart_second", default="/home/qutaiping/nas/checkpoints/second_LGE_seg_agent160-refine/latest.pth", type=str)
+    parser.add_argument(
+        "--model_file_heart_first",
+        default=os.path.join(_WEIGHTS_DIR, "lge_seg_first_SA", "LGE_SAX_seg1.pth"),
+        type=str,
+    )
+    parser.add_argument(
+        "--model_file_heart_second",
+        default=os.path.join(_WEIGHTS_DIR, "lge_seg_second_SA", "LGE_SAX_seg2.pth"),
+        type=str,
+    )
     parser.add_argument("--network_file_heart_first", default="../train/config/seg_LGE_first_config.py", type=str)
     parser.add_argument("--network_file_heart_second", type=str, default="../train/config/seg_LGE_second_config.py")
     parser.add_argument("--config_file", type=str, default='heart_seg.yaml')

@@ -16,6 +16,10 @@ try:
 except Exception:
     raise
 
+_EXAMPLE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_EXAMPLE_DIR, "..", "..", ".."))
+_WEIGHTS_DIR = os.path.join(_PROJECT_ROOT, "weights")
+
 import json
 with open('example/id_slice_info_sa.json', 'r') as f:
     nocal_dict = json.load(f)
@@ -28,8 +32,16 @@ def parse_args():
     parser.add_argument("--input_path", default="/home/qutaiping/nas/ori_data/AZHC/mapping_out/CINE/sa", type=str)
     parser.add_argument("--output_path", default="/home/qutaiping/nas/ori_data/AZHC/mapping_out/CINE/sa_pred2", type=str)
     parser.add_argument("--model_path", default=None, type=str)
-    parser.add_argument("--model_file_DY_first", default='/SMMN-Share/data_share/test_data/checkpoints/cine_seg_first_SA/latest.pth', type=str)
-    parser.add_argument("--model_file_DY_second", default="/SMMN-Share/data_share/test_data/checkpoints/cine_seg_second_SA/epoch_45.pth", type=str)
+    parser.add_argument(
+        "--model_file_DY_first",
+        default=os.path.join(_WEIGHTS_DIR, "cine_seg_first_SA", "Cine_SAX_seg1.pth"),
+        type=str,
+    )
+    parser.add_argument(
+        "--model_file_DY_second",
+        default=os.path.join(_WEIGHTS_DIR, "cine_seg_second_SA", "Cine_SAX_seg2.pth"),
+        type=str,
+    )
     parser.add_argument("--network_file_DY_first", default="train/config/seg_mrdy_stage1.py", type=str)
     parser.add_argument("--network_file_DY_second", type=str, default="train/config/seg_mrdy_stage2.py")
 
