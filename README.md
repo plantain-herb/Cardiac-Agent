@@ -297,9 +297,8 @@ The agent's findings interpretation covers the following diagnostic items, each 
 
 ## Quick Start
 
-<a id="weights--data-download"></a>
-
 ### 1. Weights & Data Download
+<a id="weights--data-download"></a>
 
 Pre-trained model weights and agent training / test data are hosted on Hugging Face: **[TaipingQu/BAAI-Cardiac-Agent](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main)**.
 
@@ -307,13 +306,6 @@ Pre-trained model weights and agent training / test data are hosted on Hugging F
 |---|---|---|
 | **Model weights** | [Files and versions](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main) in the same repository | Place under [`weights/`](#model-weights), keeping the subfolder names in the table below |
 | **Training data** | Same repository (`data/api/`, `data/findings/`, or bundled archives as released) | `data/api/` and `data/findings/` |
-
-Clone with Git LFS (recommended for large files), then copy or symlink `weights/` and `data/` into this repository:
-
-```bash
-git clone https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent
-# Copy weights/ and data/ into your Cardiac-Agent checkout as needed.
-```
 
 ### 2. Environment Setup
 
@@ -412,7 +404,7 @@ The primary interface. Accepts multimodal inputs (DICOM ZIP, NIfTI, PNG images) 
 | `/api/session/create` | POST | Create a new session |
 | `/api/session/{id}/files` | GET | List uploaded files |
 | `/api/session/{id}/frames` | GET | Get extracted frames |
-| `/api/download/{session_id}/{type}/{filename}` | GET | Download results (nifti / segmentation / reports) |
+| `/api/download/{session_id}/{type}/{filename}` | GET  Download results (nifti / segmentation / reports) |
 | `/api/conversation/{session_id}` | GET | List conversation records |
 | `/health` | GET | Health check |
 
