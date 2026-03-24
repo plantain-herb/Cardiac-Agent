@@ -33,7 +33,7 @@ MODEL_SRC_DIR = os.path.join(SRC_DIR, "NICMS")
 sys.path.insert(0, PROJECT_ROOT)
 sys.path.insert(0, MODEL_SRC_DIR)
 
-from app.config import WEIGHTS_DIR
+from app.config import WEIGHTS_DIR, EXPERT_DIR_NICMS, EXPERT_CKPT_NICMS, expert_weight_path
 
 import argparse
 import asyncio
@@ -780,12 +780,11 @@ if __name__ == "__main__":
     
     # Model paths
     MODEL_BASE_DIR = Path(MODEL_SRC_DIR)
-    WEIGHTS_PATH = Path(WEIGHTS_DIR)
-    
+
     parser.add_argument(
         "--model-cls-file",
         type=str,
-        default=os.path.join(WEIGHTS_PATH, "diagnosis_second/epoch_46.pth"),
+        default=expert_weight_path(EXPERT_DIR_NICMS, EXPERT_CKPT_NICMS),
     )
     parser.add_argument(
         "--network-cls-file",

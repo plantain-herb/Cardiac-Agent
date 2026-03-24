@@ -18,7 +18,14 @@ MODEL_SRC_DIR = os.path.join(SRC_DIR, "CINE_2CH_SEG")
 sys.path.insert(0, PROJECT_ROOT)
 sys.path.insert(0, MODEL_SRC_DIR)
 
-from app.config import WEIGHTS_DIR
+from app.config import (
+    WEIGHTS_DIR,
+    EXPERT_DIR_CINE_2CH_FIRST,
+    EXPERT_DIR_CINE_2CH_SECOND,
+    EXPERT_CKPT_CINE_2CH_SEG1,
+    EXPERT_CKPT_CINE_2CH_SEG2,
+    expert_weight_path,
+)
 
 import argparse
 import asyncio
@@ -456,12 +463,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-file-DY-first",
         type=str,
-        default=os.path.join(WEIGHTS_DIR, "cine_seg_first_2CH/latest.pth"),
+        default=expert_weight_path(EXPERT_DIR_CINE_2CH_FIRST, EXPERT_CKPT_CINE_2CH_SEG1),
     )
     parser.add_argument(
         "--model-file-DY-second",
         type=str,
-        default=os.path.join(WEIGHTS_DIR, "cine_seg_second_2CH/latest.pth"),
+        default=expert_weight_path(EXPERT_DIR_CINE_2CH_SECOND, EXPERT_CKPT_CINE_2CH_SEG2),
     )
     parser.add_argument(
         "--network-file-DY-first",
