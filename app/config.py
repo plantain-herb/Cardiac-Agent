@@ -93,7 +93,36 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # ============ 权重目录 ============
 WEIGHTS_DIR = os.path.join(PROJECT_ROOT, "weights")
 AGENT_MODEL_PATH = os.path.join(WEIGHTS_DIR, "agent")
-# AGENT_MODEL_PATH = "./merged_model/test"
+
+# 专家模型：保持 weights/ 下传统子目录结构；各目录内为统一命名的 .pth 文件
+EXPERT_DIR_CINE_2CH_FIRST = "cine_seg_first_2CH"
+EXPERT_DIR_CINE_2CH_SECOND = "cine_seg_second_2CH"
+EXPERT_DIR_CINE_4CH_FIRST = "cine_seg_first_4CH"
+EXPERT_DIR_CINE_4CH_SECOND_L = "cine_seg_second_4CH_L"
+EXPERT_DIR_CINE_4CH_SECOND_R = "cine_seg_second_4CH_R"
+EXPERT_DIR_CINE_SA_FIRST = "cine_seg_first_SA"
+EXPERT_DIR_CINE_SA_SECOND = "cine_seg_second_SA"
+EXPERT_DIR_LGE_SA_FIRST = "lge_seg_first_SA"
+EXPERT_DIR_LGE_SA_SECOND = "lge_seg_second_SA"
+EXPERT_DIR_CDS = "diagnosis_first"
+EXPERT_DIR_NICMS = "diagnosis_second"
+
+EXPERT_CKPT_CINE_2CH_SEG1 = "Cine_2CH_seg1.pth"
+EXPERT_CKPT_CINE_2CH_SEG2 = "Cine_2CH_seg2.pth"
+EXPERT_CKPT_CINE_4CH_SEG1 = "Cine_4CH_seg1.pth"
+EXPERT_CKPT_CINE_4CH_SEG2_L = "Cine_4CH_seg2_L.pth"
+EXPERT_CKPT_CINE_4CH_SEG2_R = "Cine_4CH_seg2_R.pth"
+EXPERT_CKPT_CINE_SAX_SEG1 = "Cine_SAX_seg1.pth"
+EXPERT_CKPT_CINE_SAX_SEG2 = "Cine_SAX_seg2.pth"
+EXPERT_CKPT_LGE_SAX_SEG1 = "LGE_SAX_seg1.pth"
+EXPERT_CKPT_LGE_SAX_SEG2 = "LGE_SAX_seg2.pth"
+EXPERT_CKPT_CDS = "CDS.pth"
+EXPERT_CKPT_NICMS = "NICMS.pth"
+
+
+def expert_weight_path(subdir: str, filename: str) -> str:
+    """Resolve expert checkpoint path: WEIGHTS_DIR / subdir / filename."""
+    return os.path.join(WEIGHTS_DIR, subdir, filename)
 
 # ============ 日志 / PID 目录 ============
 LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
