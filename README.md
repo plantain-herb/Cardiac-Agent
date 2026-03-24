@@ -284,6 +284,10 @@ The agent's findings interpretation covers the following diagnostic items, each 
 | | Right Ventricular Systolic Function | Normal, Decreased |
 | | Right Ventricular Diastolic Function | Normal, Decreased |
 | **Pericardium** | Pericardial | No Effusion, Effusion |
+| **Perfusion** | Perfusion | Normal, Abnormal |
+| **CINE Findings** | A brief description of the imaging findings |  |
+| **LGE Findings** | A brief description of the imaging findings |  |
+| **Rest_MPI Findings** | A brief description of the imaging findings |  |
 
 ## Tech Stack
 
