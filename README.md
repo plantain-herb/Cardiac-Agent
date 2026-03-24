@@ -148,36 +148,41 @@ Cardiac-Agent/
 ├── data/                          # Agent test data
 │   ├── api/                      # API selection test samples
 │   └── findings/                 # Findings interpretation test samples
-├── weights/                      # Model weights directory
-│   ├── agent/                    # Fine-tuned LLaVA agent weights
-│   ├── cine_seg_first_*/         # Cine segmentation stage-1 weights
-│   ├── cine_seg_second_*/        # Cine segmentation stage-2 weights
-│   ├── lge_seg_first_SA/         # LGE segmentation stage-1 weights
-│   ├── lge_seg_second_SA/        # LGE segmentation stage-2 weights
-│   ├── diagnosis_first/          # CDS classification weights
-│   └── diagnosis_second/         # NICMS classification weights
+├── weights/
+│   ├── agent/                    # HuggingFace layout
+│   ├── cine_seg_first_2CH/       # Cine_2CH_seg1.pth
+│   ├── cine_seg_second_2CH/      # Cine_2CH_seg2.pth
+│   ├── cine_seg_first_4CH/       # Cine_4CH_seg1.pth
+│   ├── cine_seg_second_4CH_L/    # Cine_4CH_seg2_L.pth
+│   ├── cine_seg_second_4CH_R/    # Cine_4CH_seg2_R.pth
+│   ├── cine_seg_first_SA/        # Cine_SAX_seg1.pth
+│   ├── cine_seg_second_SA/       # Cine_SAX_seg2.pth
+│   ├── lge_seg_first_SA/         # LGE_SAX_seg1.pth
+│   ├── lge_seg_second_SA/        # LGE_SAX_seg2.pth
+│   ├── diagnosis_first/          # CDS.pth
+│   └── diagnosis_second/         # NICMS.pth
 └── scripts/
     └── merge_lora_weights.py     # LoRA weight merging utility
 ```
 
 ## Model Weights
 
-All model weights should be placed under the `weights/` directory. The following table describes each sub-directory:
+Place the agent under `weights/agent/` (HuggingFace layout). **Expert checkpoints** stay under the **traditional subdirectories** below; each folder holds the listed `.pth` filename (defaults in `app.config`: `expert_weight_path(subdir, filename)`).
 
-| Directory | Model | Task | Worker | Checkpoint |
+| Subdirectory | Checkpoint file | Model | Task | Worker |
 |---|---|---|---|---|
-| `agent/` | LLaVA (LLaMA + Vision Encoder) | Multimodal Agent — sequence identification, API selection, result summarization | `agent_worker.py` | HuggingFace format |
-| `cine_seg_first_2CH/` | Segmentation Stage-1 | Cine 2-Chamber coarse segmentation | `cine_2ch_seg_worker.py` | `latest.pth` |
-| `cine_seg_second_2CH/` | Segmentation Stage-2 | Cine 2-Chamber refined segmentation | `cine_2ch_seg_worker.py` | `latest.pth` |
-| `cine_seg_first_4CH/` | Segmentation Stage-1 | Cine 4-Chamber coarse segmentation | `cine_4ch_seg_worker.py` | `epoch_40.pth` |
-| `cine_seg_second_4CH_L/` | Segmentation Stage-2 (Left) | Cine 4-Chamber left-heart refined segmentation | `cine_4ch_seg_worker.py` | `latest.pth` |
-| `cine_seg_second_4CH_R/` | Segmentation Stage-2 (Right) | Cine 4-Chamber right-heart refined segmentation | `cine_4ch_seg_worker.py` | `latest.pth` |
-| `cine_seg_first_SA/` | Segmentation Stage-1 | Cine Short-Axis coarse segmentation | `cine_sa_seg_worker.py` | `latest.pth` |
-| `cine_seg_second_SA/` | Segmentation Stage-2 | Cine Short-Axis refined segmentation | `cine_sa_seg_worker.py` | `latest.pth` |
-| `lge_seg_first_SA/` | Segmentation Stage-1 | LGE Short-Axis coarse segmentation | `lge_sa_seg_worker.py` | `latest.pth` |
-| `lge_seg_second_SA/` | Segmentation Stage-2 | LGE Short-Axis refined segmentation | `lge_sa_seg_worker.py` | `latest.pth` |
-| `diagnosis_first/` | Classification | Cardiac Disease Screening (Normal / ICM / NICM) | `cds_worker.py` | `epoch_53.pth` |
-| `diagnosis_second/` | Classification | Non-Ischemic Cardiomyopathy Subtyping (HCM / DCM / Inflammatory / Restrictive / Arrhythmogenic) | `nicms_worker.py` | `epoch_46.pth` |
+| `agent/` | *(HuggingFace files)* | LLaVA (LLaMA + Vision Encoder) | Multimodal Agent | `agent_worker.py` |
+| `cine_seg_first_2CH/` | `Cine_2CH_seg1.pth` | Segmentation stage 1 | Cine 2-Chamber coarse | `cine_2ch_seg_worker.py` |
+| `cine_seg_second_2CH/` | `Cine_2CH_seg2.pth` | Segmentation stage 2 | Cine 2-Chamber refined | `cine_2ch_seg_worker.py` |
+| `cine_seg_first_4CH/` | `Cine_4CH_seg1.pth` | Segmentation stage 1 | Cine 4-Chamber coarse | `cine_4ch_seg_worker.py` |
+| `cine_seg_second_4CH_L/` | `Cine_4CH_seg2_L.pth` | Segmentation stage 2 (left) | Cine 4-Chamber L refinement | `cine_4ch_seg_worker.py` |
+| `cine_seg_second_4CH_R/` | `Cine_4CH_seg2_R.pth` | Segmentation stage 2 (right) | Cine 4-Chamber R refinement | `cine_4ch_seg_worker.py` |
+| `cine_seg_first_SA/` | `Cine_SAX_seg1.pth` | Segmentation stage 1 | Cine short-axis coarse | `cine_sa_seg_worker.py` |
+| `cine_seg_second_SA/` | `Cine_SAX_seg2.pth` | Segmentation stage 2 | Cine short-axis refined | `cine_sa_seg_worker.py` |
+| `lge_seg_first_SA/` | `LGE_SAX_seg1.pth` | Segmentation stage 1 | LGE short-axis coarse | `lge_sa_seg_worker.py` |
+| `lge_seg_second_SA/` | `LGE_SAX_seg2.pth` | Segmentation stage 2 | LGE short-axis refined | `lge_sa_seg_worker.py` |
+| `diagnosis_first/` | `CDS.pth` | Classification | Cardiac Disease Screening | `cds_worker.py` |
+| `diagnosis_second/` | `NICMS.pth` | Classification | NICMS subtyping | `nicms_worker.py` |
 
 ## Test Data
 
@@ -303,8 +308,8 @@ The agent's findings interpretation covers the following diagnostic items, each 
 
 | Resource | Hugging Face | Local path |
 |---|---|---|
-| **Model weights** | [TaipingQu/BAAI-Cardiac-Agent](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main) (model) | [`weights/`] — use the same subfolder names as in the table |
-| **Test data** | [TaipingQu/CMRAgentEvalSet](https://huggingface.co/datasets/TaipingQu/CMRAgentEvalSet) (dataset) |  |
+| **Model weights** | [TaipingQu/BAAI-Cardiac-Agent](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main) (model) | `weights/` — `agent/` plus expert subdirs + `.pth` names in [Model Weights](#model-weights) |
+| **Test data** | [TaipingQu/CMRAgentEvalSet](https://huggingface.co/datasets/TaipingQu/CMRAgentEvalSet) (dataset) | `data/api/` and `data/findings/` (or as released) |
 
 ### 2. Environment Setup
 
