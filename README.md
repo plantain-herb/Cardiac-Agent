@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🫀 Cardiac-Agent
+# 🫀 BAAI Cardiac-Agent
 
 **An Intelligent Cardiac MRI Analysis System Driven by a Multimodal Agent**
 
@@ -145,11 +145,118 @@ Cardiac-Agent/
 │   ├── NICMS/                    # Non-ischemic cardiomyopathy model
 │   ├── CMR/                      # Cardiac metrics calculation
 │   └── RAG/ChatCAD/              # RAG for medical info retrieval
+├── data/                          # Agent training data
+│   ├── api/                      # API selection training data
+│   └── findings/                 # Findings interpretation training data
 ├── weights/                      # Model weights directory
-│   └── agent/                    # Fine-tuned LLaVA agent weights
+│   ├── agent/                    # Fine-tuned LLaVA agent weights
+│   ├── cine_seg_first_*/         # Cine segmentation stage-1 weights
+│   ├── cine_seg_second_*/        # Cine segmentation stage-2 weights
+│   ├── lge_seg_first_SA/         # LGE segmentation stage-1 weights
+│   ├── lge_seg_second_SA/        # LGE segmentation stage-2 weights
+│   ├── diagnosis_first/          # CDS classification weights
+│   └── diagnosis_second/         # NICMS classification weights
 └── scripts/
     └── merge_lora_weights.py     # LoRA weight merging utility
 ```
+
+## Model Weights
+
+All model weights should be placed under the `weights/` directory. The following table describes each sub-directory:
+
+| Directory | Model | Task | Worker | Checkpoint |
+|---|---|---|---|---|
+| `agent/` | LLaVA (LLaMA + Vision Encoder) | Multimodal Agent — sequence identification, API selection, result summarization | `agent_worker.py` | HuggingFace format |
+| `cine_seg_first_2CH/` | Segmentation Stage-1 | Cine 2-Chamber coarse segmentation | `cine_2ch_seg_worker.py` | `latest.pth` |
+| `cine_seg_second_2CH/` | Segmentation Stage-2 | Cine 2-Chamber refined segmentation | `cine_2ch_seg_worker.py` | `latest.pth` |
+| `cine_seg_first_4CH/` | Segmentation Stage-1 | Cine 4-Chamber coarse segmentation | `cine_4ch_seg_worker.py` | `epoch_40.pth` |
+| `cine_seg_second_4CH_L/` | Segmentation Stage-2 (Left) | Cine 4-Chamber left-heart refined segmentation | `cine_4ch_seg_worker.py` | `latest.pth` |
+| `cine_seg_second_4CH_R/` | Segmentation Stage-2 (Right) | Cine 4-Chamber right-heart refined segmentation | `cine_4ch_seg_worker.py` | `latest.pth` |
+| `cine_seg_first_SA/` | Segmentation Stage-1 | Cine Short-Axis coarse segmentation | `cine_sa_seg_worker.py` | `latest.pth` |
+| `cine_seg_second_SA/` | Segmentation Stage-2 | Cine Short-Axis refined segmentation | `cine_sa_seg_worker.py` | `latest.pth` |
+| `lge_seg_first_SA/` | Segmentation Stage-1 | LGE Short-Axis coarse segmentation | `lge_sa_seg_worker.py` | `latest.pth` |
+| `lge_seg_second_SA/` | Segmentation Stage-2 | LGE Short-Axis refined segmentation | `lge_sa_seg_worker.py` | `latest.pth` |
+| `diagnosis_first/` | Classification | Cardiac Disease Screening (Normal / ICM / NICM) | `cds_worker.py` | `epoch_53.pth` |
+| `diagnosis_second/` | Classification | Non-Ischemic Cardiomyopathy Subtyping (HCM / DCM / Inflammatory / Restrictive / Arrhythmogenic) | `nicms_worker.py` | `epoch_46.pth` |
+
+## Training Data
+
+Training data for the LLaVA-based agent is organized into two categories under the `data/` directory:
+
+| Category | Directory | Description | Format |
+|---|---|---|---|
+| **API Selection** | `data/api/` | Multi-turn conversations teaching the agent to select the correct expert API, dispatch the task, and summarize the expert output back to the user | JSON |
+| **Findings Interpretation** | `data/findings/` | Single-turn conversations teaching the agent to directly interpret cardiac MRI images and produce clinical findings (e.g., valve status, chamber morphology) without calling any expert API | JSON |
+
+Each JSON sample contains an `id`, a list of `image` paths, and multi-turn `conversations`. Each GPT turn includes structured `thoughts`, `actions` (API calls, if any), and a natural-language `value`.
+
+<details>
+<summary><b>API Selection example</b> — agent selects an expert API and processes its output</summary>
+
+```json
+{
+  "id": "0051270568_cine_4ch_slice_8",
+  "image": [
+    "image/cine/4ch/0001183_4ch_image/slice_8/slice_8_0.png",
+    "image/cine/4ch/0001183_4ch_image/slice_8/slice_8_1.png",
+    "image/cine/4ch/0001183_4ch_image/slice_8/slice_8_2.png"
+  ],
+  "conversations": [
+    {
+      "from": "human",
+      "value": "Can you segment this image?\n<image>"
+    },
+    {
+      "from": "gpt",
+      "thoughts": "For this scan, a segmentation tool can help isolate the cardiac structures of interest.",
+      "actions": [
+        { "API_name": "4CH Cine Segmentation", "API_params": {} }
+      ],
+      "value": "Certainly! I have used the 4CH Cine Segmentation to delineate all four chambers in this four-chamber cine image for chamber size and morphology comparison."
+    },
+    {
+      "from": "human",
+      "value": "4CH Cine Segmentation output: {'message': 'The 4CH Cine Segmentation has processed the image.'}\n\nAnswer my first question: What technique can enhance the visualization of cardiac regions in this medical scan?"
+    },
+    {
+      "from": "gpt",
+      "thoughts": "Segmentation is done on this scan; I will provide the answer based on the output.",
+      "actions": [],
+      "value": "The result below provides a clear depiction, aiding in your medical evaluation."
+    }
+  ]
+}
+```
+
+</details>
+
+<details>
+<summary><b>Findings Interpretation example</b> — agent directly reads the image and reports clinical findings</summary>
+
+```json
+{
+  "id": "0052059140_cine_4ch_slice_17",
+  "image": [
+    "image/cine/4ch/0001267_4ch_image/slice_17/slice_17_0.png",
+    "image/cine/4ch/0001267_4ch_image/slice_17/slice_17_1.png",
+    "image/cine/4ch/0001267_4ch_image/slice_17/slice_17_2.png"
+  ],
+  "conversations": [
+    {
+      "from": "human",
+      "value": "Please evaluate the cardiac valve status in this image.\n<image>"
+    },
+    {
+      "from": "gpt",
+      "thoughts": "I can analyze the valve morphology and functional status directly from this image.",
+      "actions": [],
+      "value": "Mitral Valve: Normal; Tricuspid Valve: Normal"
+    }
+  ]
+}
+```
+
+</details>
 
 ## Tech Stack
 
