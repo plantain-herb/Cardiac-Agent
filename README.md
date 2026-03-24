@@ -145,9 +145,9 @@ Cardiac-Agent/
 │   ├── NICMS/                    # Non-ischemic cardiomyopathy model
 │   ├── CMR/                      # Cardiac metrics calculation
 │   └── RAG/ChatCAD/              # RAG for medical info retrieval
-├── data/                          # Agent training data
-│   ├── api/                      # API selection training data
-│   └── findings/                 # Findings interpretation training data
+├── data/                          # Agent test data
+│   ├── api/                      # API selection test samples
+│   └── findings/                 # Findings interpretation test samples
 ├── weights/                      # Model weights directory
 │   ├── agent/                    # Fine-tuned LLaVA agent weights
 │   ├── cine_seg_first_*/         # Cine segmentation stage-1 weights
@@ -179,14 +179,16 @@ All model weights should be placed under the `weights/` directory. The following
 | `diagnosis_first/` | Classification | Cardiac Disease Screening (Normal / ICM / NICM) | `cds_worker.py` | `epoch_53.pth` |
 | `diagnosis_second/` | Classification | Non-Ischemic Cardiomyopathy Subtyping (HCM / DCM / Inflammatory / Restrictive / Arrhythmogenic) | `nicms_worker.py` | `epoch_46.pth` |
 
-## Training Data
+## Test Data
 
-Training data for the BAAI Cardiac Agent is organized into two categories under the `data/` directory:
+Download the evaluation set from Hugging Face: **[TaipingQu/CMRAgentEvalSet](https://huggingface.co/datasets/TaipingQu/CMRAgentEvalSet)**.
+
+After download, data is organized into two categories under the `data/` directory:
 
 | Category | Directory | Description | Format |
 |---|---|---|---|
-| **API Selection** | `data/api/` | Multi-turn conversations teaching the agent to select the correct expert API, dispatch the task, and summarize the expert output back to the user | JSON |
-| **Findings Interpretation** | `data/findings/` | Single-turn conversations teaching the agent to directly interpret cardiac MRI images and produce clinical findings (e.g., valve status, chamber morphology) without calling any expert API | JSON |
+| **API Selection** | `data/api/` | Multi-turn conversation samples for API selection: expert API choice, dispatch, and summarizing expert output back to the user | JSON |
+| **Findings Interpretation** | `data/findings/` | Single-turn samples for direct image interpretation and clinical-style findings (e.g., valve status, chamber morphology) without calling any expert API | JSON |
 
 Each JSON sample contains an `id`, a list of `image` paths, and multi-turn `conversations`. Each GPT turn includes structured `thoughts`, `actions` (API calls, if any), and a natural-language `value`.
 
@@ -297,14 +299,12 @@ The agent's findings interpretation covers the following diagnostic items, each 
 
 ## Quick Start
 
-### 1. Weights & Data Download
+### 1. Weights & Test Data Download
 
-Pre-trained model weights and agent training / test data are hosted on Hugging Face: **[TaipingQu/BAAI-Cardiac-Agent](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main)**.
-
-| Resource | Where to get it | Local path |
+| Resource | Hugging Face | Local path |
 |---|---|---|
-| **Model weights** | [Files and versions](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main) in the same repository | Place under [`weights/`](#model-weights), keeping the subfolder names in the table below |
-| **Training data** | Same repository (`data/api/`, `data/findings/`, or bundled archives as released) | `data/api/` and `data/findings/` |
+| **Model weights** | [TaipingQu/BAAI-Cardiac-Agent](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main) (model) | [`weights/`] — use the same subfolder names as in the table |
+| **Test data** | [TaipingQu/CMRAgentEvalSet](https://huggingface.co/datasets/TaipingQu/CMRAgentEvalSet) (dataset) |  |
 
 ### 2. Environment Setup
 
