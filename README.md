@@ -293,12 +293,11 @@ The agent's findings interpretation covers the following diagnostic items, each 
 - Python 3.8+
 - CUDA-capable GPU(s) -- the agent and segmentation/classification workers require GPU
 - Conda (for environment management)
-- Model weights placed in `weights/` (see [Weights & Data Download](#weights--data-download))
+- Model weights placed in `weights/`
 
 ## Quick Start
 
 ### 1. Weights & Data Download
-<a id="weights--data-download"></a>
 
 Pre-trained model weights and agent training / test data are hosted on Hugging Face: **[TaipingQu/BAAI-Cardiac-Agent](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main)**.
 
