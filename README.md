@@ -52,7 +52,7 @@ Upload (DICOM / NIfTI) → Agent Sequence Identification → Smart Frame Extract
 
 | Feature | Description |
 |---|---|
-| **Sequence Identification** | Automatically identifies CMR sequences (cine 2CH / 4CH / SA, LGE SA, T1/T2 mapping) via the Agent |
+| **Sequence Identification** | Automatically identifies CMR sequences (cine 2CH / 4CH / SA, LGE SA, Rest Myocardium Perfusion Imaging / Rest_MPI) via the Agent |
 | **Cardiac Segmentation** | Multi-view segmentation: cine 2-chamber, 4-chamber, short-axis, and LGE short-axis |
 | **Disease Screening (CDS)** | Three-class classification: Normal / Ischemic Cardiomyopathy / Non-ischemic Cardiomyopathy |
 | **Cardiomyopathy Subtyping (NICMS)** | Five-class subtyping: HCM / DCM / Inflammatory / Restrictive / Arrhythmogenic |
@@ -181,7 +181,7 @@ All model weights should be placed under the `weights/` directory. The following
 
 ## Training Data
 
-Training data for the LLaVA-based agent is organized into two categories under the `data/` directory:
+Training data for the BAAI Cardiac Agent is organized into two categories under the `data/` directory:
 
 | Category | Directory | Description | Format |
 |---|---|---|---|
@@ -293,11 +293,29 @@ The agent's findings interpretation covers the following diagnostic items, each 
 - Python 3.8+
 - CUDA-capable GPU(s) -- the agent and segmentation/classification workers require GPU
 - Conda (for environment management)
-- Model weights placed in `weights/`
+- Model weights placed in `weights/` (see [Weights & Data Download](#weights--data-download))
 
 ## Quick Start
 
-### 1. Environment Setup
+<a id="weights--data-download"></a>
+
+### 1. Weights & Data Download
+
+Pre-trained model weights and agent training / test data are hosted on Hugging Face: **[TaipingQu/BAAI-Cardiac-Agent](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main)**.
+
+| Resource | Where to get it | Local path |
+|---|---|---|
+| **Model weights** | [Files and versions](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main) in the same repository | Place under [`weights/`](#model-weights), keeping the subfolder names in the table below |
+| **Training data** | Same repository (`data/api/`, `data/findings/`, or bundled archives as released) | `data/api/` and `data/findings/` |
+
+Clone with Git LFS (recommended for large files), then copy or symlink `weights/` and `data/` into this repository:
+
+```bash
+git clone https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent
+# Copy weights/ and data/ into your Cardiac-Agent checkout as needed.
+```
+
+### 2. Environment Setup
 
 ```bash
 # Create and activate the agent environment
@@ -311,7 +329,7 @@ conda activate cardiac_models
 pip install -r requirements_models.txt
 ```
 
-### 2. Configuration
+### 3. Configuration
 
 Copy `.env.example` to `.env` and set the required variables:
 
@@ -324,7 +342,7 @@ Key environment variables:
 - `API_BASE_URL` -- Base URL for the LLM API
 - `MODEL` -- LLM model name (default: `deepseek-chat`)
 
-### 3. Start All Services
+### 4. Start All Services
 
 ```bash
 # Start everything (controller → agent → workers → demo)
@@ -337,7 +355,7 @@ Key environment variables:
 ./app/start.sh demo          # Backend + Frontend
 ```
 
-### 4. Access the Web Demo
+### 5. Access the Web Demo
 
 Open your browser and navigate to `http://localhost:8080`.
 
@@ -412,7 +430,7 @@ The primary interface. Accepts multimodal inputs (DICOM ZIP, NIfTI, PNG images) 
 | Cine 4-Chamber | `cine_4ch` | Segmentation, CDS, NICMS (optional), MRG |
 | Cine Short-Axis | `cine_sa` | Segmentation, CDS, NICMS, MRG, Metrics |
 | LGE Short-Axis | `lge_sa` | Segmentation, NICMS, MRG (optional) |
-| T1 / T2 Mapping | `tp` | Sequence identification only |
+| Rest Myocardium Perfusion Imaging (Rest_MPI) | `tp` | Sequence identification only |
 
 ## License
 
