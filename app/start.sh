@@ -15,7 +15,7 @@
 
 set -e
 
-# 配置 — PROJECT_DIR 始终指向 MMedAgent 根目录
+# 配置 — PROJECT_DIR 始终指向 Cardiac-Agent 根目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
@@ -32,9 +32,9 @@ DEMO_BACKEND_PORT=8005
 DEMO_FRONTEND_PORT=8080
 
 # ============ Conda 环境配置 ============
-CONDA_ENV_AGENT="mmedagent"           # LLaVA Agent模型环境
+CONDA_ENV_AGENT="cardiac_agent"           # LLaVA Agent模型环境
 CONDA_ENV_EXPERT="cardiac_models"     # Expert模型环境 (分割/分类)
-CONDA_ENV_DEMO="mmedagent"           # Demo前后端环境
+CONDA_ENV_DEMO="cardiac_agent"           # Demo前后端环境
 
 # Conda初始化路径 (根据你的系统修改)
 CONDA_PATH="${HOME}/anaconda3"
@@ -867,7 +867,7 @@ show_gpu_config() {
 show_help() {
     echo "心脏医学影像Agent系统 - 服务管理脚本"
     echo ""
-    echo "使用方法 (从 MMedAgent 根目录运行):"
+    echo "使用方法 (从 Cardiac-Agent 根目录运行):"
     echo "  ./app/start.sh all              启动所有服务 (Controller + Agent + Workers)"
     echo "  ./app/start.sh controller       只启动Controller"
     echo "  ./app/start.sh agent            只启动LLaVA Agent模型"
