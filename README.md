@@ -308,12 +308,13 @@ The agent's findings interpretation covers the following diagnostic items, each 
 
 ## Quick Start
 
-### 1. Weights & Test Data Download
+### 1. Weights & Data Download
 
 | Resource | Hugging Face | Local path |
 |---|---|---|
 | **Model weights** | [TaipingQu/BAAI-Cardiac-Agent](https://huggingface.co/TaipingQu/BAAI-Cardiac-Agent/tree/main) (model) | `weights/` — `agent/` plus expert subdirs + `.pth` names in [Model Weights](#model-weights) |
 | **Test data** | [TaipingQu/CMRAgentEvalSet](https://huggingface.co/datasets/TaipingQu/CMRAgentEvalSet) (dataset) | `data/api/` and `data/findings/` (or as released) |
+| **CMR-MULTI** | [TaipingQu/CMR-MULTI](https://huggingface.co/datasets/TaipingQu/CMR-MULTI) (dataset) | CMR multi-sequence segmentation dataset |
 
 ### 2. Environment Setup
 
