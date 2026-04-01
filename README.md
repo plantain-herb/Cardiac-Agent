@@ -297,7 +297,7 @@ The agent's findings interpretation covers the following diagnostic items, each 
 - **Medical Imaging**: SimpleITK, NumPy
 - **RAG / LLM**: OpenAI-compatible API (ChatCAD)
 - **Frontend**: Vanilla HTML / CSS / JavaScript
-- **Environment**: Conda (`mmedagent` for agent, `cardiac_models` for expert models)
+- **Environment**: Conda (`cardiac_agent` for agent, `cardiac_models` for expert models)
 
 ## Prerequisites
 
