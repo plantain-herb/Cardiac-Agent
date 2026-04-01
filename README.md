@@ -320,8 +320,8 @@ The agent's findings interpretation covers the following diagnostic items, each 
 
 ```bash
 # Create and activate the agent environment
-conda create -n mmedagent python=3.10
-conda activate mmedagent
+conda create -n cardiac_agent python=3.10
+conda activate cardiac_agent
 pip install -r requirements.txt
 
 # Create and activate the expert models environment
@@ -432,6 +432,43 @@ The primary interface. Accepts multimodal inputs (DICOM ZIP, NIfTI, PNG images) 
 | Cine Short-Axis | `cine_sa` | Segmentation, CDS, NICMS, MRG, Metrics |
 | LGE Short-Axis | `lge_sa` | Segmentation, NICMS, MRG (optional) |
 | Rest Myocardium Perfusion Imaging (Rest_MPI) | `tp` | Sequence identification only |
+
+## Acknowledgements
+
+The architecture of Cardiac-Agent is heavily inspired by **[MMedAgent](https://github.com/Wangyixinxin/MMedAgent)** (Li et al., EMNLP 2024). We adopt their Agent-Expert design pattern and extend it to the cardiac MRI domain with specialized expert workers for CMR sequence identification, multi-view segmentation, disease screening, and report generation.
+
+We also gratefully acknowledge the following projects that Cardiac-Agent builds upon:
+
+- [LLaVA](https://github.com/haotian-liu/LLaVA) / [LLaVA-Med](https://github.com/microsoft/LLaVA-Med) -- Multimodal large language model backbone
+- [ChatCAD](https://github.com/zhaozh10/ChatCAD) -- RAG-based medical information retrieval
+
+If you use our work, please also consider citing the following:
+
+```bibtex
+@inproceedings{li2024mmedagent,
+  title={Mmedagent: Learning to use medical tools with multi-modal agent},
+  author={Li, Binxu and Yan, Tiankai and Pan, Yuanting and Luo, Jie and Ji, Ruiyang and Ding, Jiayuan and Xu, Zhe and Liu, Shilong and Dong, Haoyu and Lin, Zihao and others},
+  booktitle={Findings of the Association for Computational Linguistics: EMNLP 2024},
+  pages={8745--8760},
+  year={2024}
+}
+
+@article{li2023llava,
+  title={Llava-med: Training a large language-and-vision assistant for biomedicine in one day},
+  author={Li, Chunyuan and Wong, Cliff and Zhang, Sheng and Usuyama, Naoto and Liu, Haotian and Yang, Jianwei and Naumann, Tristan and Poon, Hoifung and Gao, Jianfeng},
+  journal={Advances in Neural Information Processing Systems},
+  volume={36},
+  pages={28541--28564},
+  year={2023}
+}
+
+@article{wang2023chatcad,
+  title={Chatcad: Interactive computer-aided diagnosis on medical image using large language models},
+  author={Wang, Sheng and Zhao, Zihao and Ouyang, Xi and Wang, Qian and Shen, Dinggang},
+  journal={arXiv preprint arXiv:2302.07257},
+  year={2023}
+}
+```
 
 ## License
 
