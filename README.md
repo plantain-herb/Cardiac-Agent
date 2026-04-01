@@ -373,8 +373,8 @@ Open your browser and navigate to `http://localhost:8080`.
 
 | Service | Port | Environment | GPU |
 |---|---|---|---|
-| Controller | 30000 | mmedagent | - |
-| LLaVA Agent | 40000 | mmedagent | Yes |
+| Controller | 30000 | cardiac_agent | - |
+| LLaVA Agent | 40000 | cardiac_agent | Yes |
 | Cine 2CH Segmentation | 21010 | cardiac_models | Yes |
 | Cine 4CH Segmentation | 21011 | cardiac_models | Yes |
 | Cine SA Segmentation | 21012 | cardiac_models | Yes |
@@ -383,9 +383,9 @@ Open your browser and navigate to `http://localhost:8080`.
 | NICMS Subtyping | 21021 | cardiac_models | Yes |
 | Medical Report Generation | 21030 | cardiac_models | - |
 | Cardiac Metrics | 21031 | cardiac_models | - |
-| Medical Info Retrieval | 21040 | mmedagent | - |
-| Sequence Analysis | 21050 | mmedagent | - |
-| Demo Backend (API) | 8005 | mmedagent | - |
+| Medical Info Retrieval | 21040 | cardiac_agent | - |
+| Sequence Analysis | 21050 | cardiac_agent | - |
+| Demo Backend (API) | 8005 | cardiac_agent | - |
 | Demo Frontend | 8080 | - | - |
 
 ## API Reference
