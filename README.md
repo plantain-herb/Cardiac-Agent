@@ -445,28 +445,14 @@ We also gratefully acknowledge the following projects that Cardiac-Agent builds 
 If you use our work, please also consider citing the following:
 
 ```bibtex
-@inproceedings{li2024mmedagent,
-  title={Mmedagent: Learning to use medical tools with multi-modal agent},
-  author={Li, Binxu and Yan, Tiankai and Pan, Yuanting and Luo, Jie and Ji, Ruiyang and Ding, Jiayuan and Xu, Zhe and Liu, Shilong and Dong, Haoyu and Lin, Zihao and others},
-  booktitle={Findings of the Association for Computational Linguistics: EMNLP 2024},
-  pages={8745--8760},
-  year={2024}
-}
-
-@article{li2023llava,
-  title={Llava-med: Training a large language-and-vision assistant for biomedicine in one day},
-  author={Li, Chunyuan and Wong, Cliff and Zhang, Sheng and Usuyama, Naoto and Liu, Haotian and Yang, Jianwei and Naumann, Tristan and Poon, Hoifung and Gao, Jianfeng},
-  journal={Advances in Neural Information Processing Systems},
-  volume={36},
-  pages={28541--28564},
-  year={2023}
-}
-
-@article{wang2023chatcad,
-  title={Chatcad: Interactive computer-aided diagnosis on medical image using large language models},
-  author={Wang, Sheng and Zhao, Zihao and Ouyang, Xi and Wang, Qian and Shen, Dinggang},
-  journal={arXiv preprint arXiv:2302.07257},
-  year={2023}
+@misc{qu2026baaicardiacagentintelligent,
+      title={BAAI Cardiac Agent: An intelligent multimodal agent for automated reasoning and diagnosis of cardiovascular diseases from cardiac magnetic resonance imaging}, 
+      author={Taiping Qu and Hongkai Zhang and Lantian Zhang and Can Zhao and Nan Zhang and Hui Wang and Zhen Zhou and Mingye Zou and Kairui Bo and Pengfei Zhao and Xingxing Jin and Zixian Su and Kun Jiang and Huan Liu and Yu Du and Maozhou Wang and Ruifang Yan and Zhongyuan Wang and Tiejun Huang and Lei Xu and Henggui Zhang},
+      year={2026},
+      eprint={2604.04078},
+      archivePrefix={arXiv},
+      primaryClass={eess.IV},
+      url={https://arxiv.org/abs/2604.04078}, 
 }
 ```
 
