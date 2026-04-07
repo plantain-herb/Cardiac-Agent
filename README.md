@@ -7,7 +7,7 @@
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c.svg)](https://pytorch.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
-[![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red.svg)]()
+[![License](http://www.apache.org/licenses/LICENSE-2.0)]()
 
 The system orchestrates a fine-tuned LLaVA-based agent with multiple expert models to provide automated **sequence identification**, **cardiac structure segmentation**, **disease screening**, and **comprehensive report generation**.
 
