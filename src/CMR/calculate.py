@@ -58,13 +58,13 @@ if __name__ == "__main__":
     result = []
     error_list = []
 
-    for id_map in os.listdir('/home/taiping-qu/code/nas/ori_data/AZHC/mapping_out/CINE/sa_pred_fh'):
+    for id_map in os.listdir('CINE/sa_pred_fh'):
         id_map = id_map.split('_sa_image-seg.nii.gz')[0]
         # print(id_map)
         # image_key = id_mapping2[id_map]
         # padded_image_key = pad_image_key(image_key)
         
-        # 判断padded_image_key是否在id_mapping2中
+                                           
         # if id_map not in id_mapping2:
             # error_list.append({
             #     "id": id_map,
@@ -72,11 +72,11 @@ if __name__ == "__main__":
             # })
             # continue
 
-        # 1. 分割结果目录
-        cine_4ch_mask_path = f"/home/taiping-qu/code/nas/ori_data/AZHC/mapping_out/CINE/4ch_pred/{id_map}_4ch_image-seg.nii.gz"
-        cine_sa_mask_path = f"/home/taiping-qu/code/nas/ori_data/AZHC/mapping_out/CINE/sa_pred2/{id_map}_sa_image-seg.nii.gz"
+                   
+        cine_4ch_mask_path = f"CINE/4ch_pred/{id_map}_4ch_image-seg.nii.gz"
+        cine_sa_mask_path = f"CINE/sa_pred2/{id_map}_sa_image-seg.nii.gz"
         if not os.path.exists(cine_sa_mask_path):
-            cine_sa_mask_path = f"/home/taiping-qu/code/nas/ori_data/AZHC/mapping_out/CINE/sa_pred2/{id_map}.nii.gz"
+            cine_sa_mask_path = f"CINE/sa_pred2/{id_map}.nii.gz"
         # print(cine_4ch_mask_path)
         # print(cine_sa_mask_path)
         slice_nums_sax = read_id_slice_sax()
@@ -91,15 +91,15 @@ if __name__ == "__main__":
             slice_num_4ch = slice_nums_4ch[str(id_map)]
         except:
             continue
-        # 2. 测量结果
+                 
         cine_sa_metrics = calculate_cine_sa_metrics(cine_sa_mask_path, slice_num_sax)
         cine_4ch_metrics = calculate_cine_4ch_metrics(cine_4ch_mask_path, slice_num_4ch)
 
-        # 3. 重新整理结果
+                   
         try:
             result_dict = {"id": id_mapping2[id_map]}
             
-            # 1. 处理主要直径测量
+                         
             try:
                 result_dict["LA_LD"] = cine_4ch_metrics['LA_ED_Long_Diameter']
             except:
@@ -121,7 +121,7 @@ if __name__ == "__main__":
             except:
                 result_dict["RV_LD"] = None
             
-            # 2. 批量处理LV壁厚度的函数
+                             
             def get_metric_safe(metrics_dict, key, default=None):
                 try:
                     return metrics_dict[key]
@@ -129,28 +129,28 @@ if __name__ == "__main__":
                     print(f"Warning: {key} not available for {id_map}")
                     return default
             
-            # 使用列表推导式批量处理
+                         
             segments_info = [
-                # (前缀, 编号, 名称, 是否max/mean/min)
-                ("LV_BS", 1, "基底前间隔", "max"),
-                ("LV_BS", 2, "基底前壁", "max"),
-                ("LV_BS", 3, "基底侧壁", "max"),
-                ("LV_BS", 4, "基底后壁", "max"),
-                ("LV_BS", 5, "基底下壁", "max"),
-                ("LV_BS", 6, "基底下间隔", "max"),
-                ("LV_IP", 7, "中间前间隔", "max"),
-                ("LV_IP", 8, "中间前壁", "max"),
-                ("LV_IP", 9, "中间侧壁", "max"),
-                ("LV_IP", 10, "中间后壁", "max"),
-                ("LV_IP", 11, "中间下壁", "max"),
-                ("LV_IP", 12, "中间下间隔", "max"),
-                ("LV_SP", 13, "心尖前壁", "max"),
-                ("LV_SP", 14, "心尖侧壁", "max"),
-                ("LV_SP", 15, "心尖下壁", "max"),
-                ("LV_SP", 16, "心尖间隔", "max"),
+                                              
+                ("LV_BS", 1, "Basal_anteroseptal", "max"),
+                ("LV_BS", 2, "Basal_anterior", "max"),
+                ("LV_BS", 3, "Basal_lateral", "max"),
+                ("LV_BS", 4, "Basal_posterior", "max"),
+                ("LV_BS", 5, "Basal_inferior", "max"),
+                ("LV_BS", 6, "Basal_inferoseptal", "max"),
+                ("LV_IP", 7, "Mid_anteroseptal", "max"),
+                ("LV_IP", 8, "Mid_anterior", "max"),
+                ("LV_IP", 9, "Mid_lateral", "max"),
+                ("LV_IP", 10, "Mid_posterior", "max"),
+                ("LV_IP", 11, "Mid_inferior", "max"),
+                ("LV_IP", 12, "Mid_inferoseptal", "max"),
+                ("LV_SP", 13, "Apical_anterior", "max"),
+                ("LV_SP", 14, "Apical_lateral", "max"),
+                ("LV_SP", 15, "Apical_inferior", "max"),
+                ("LV_SP", 16, "Apical_septal", "max"),
             ]
             
-            # 处理max值
+                    
             for prefix, num, name, metric_type in segments_info:
                 key = f"{prefix}_{num:02d}_{metric_type}"
                 try:
@@ -159,7 +159,7 @@ if __name__ == "__main__":
                 except:
                     result_dict[key] = None
             
-            # 处理mean值
+                     
             for prefix, num, name, metric_type in segments_info:
                 key = f"{prefix}_{num:02d}_mean"
                 try:
@@ -168,7 +168,7 @@ if __name__ == "__main__":
                 except:
                     result_dict[key] = None
             
-            # 处理min值
+                    
             for prefix, num, name, metric_type in segments_info:
                 key = f"{prefix}_{num:02d}_min"
                 try:
@@ -177,7 +177,7 @@ if __name__ == "__main__":
                 except:
                     result_dict[key] = None
             
-            # 3. 特殊处理心尖厚度
+                         
             try:
                 result_dict["LV_TP_17_max"] = cine_4ch_metrics['ED_LV_Apex_Thickness_max']
             except:
@@ -193,7 +193,7 @@ if __name__ == "__main__":
             except:
                 result_dict["LV_TP_17_min"] = None
             
-            # 4. RV壁厚度
+                      
             rv_thickness_keys = ['ED_RV_Wall_Thickness_Div_1', 'ED_RV_Wall_Thickness_Div_2', 'ED_RV_Wall_Thickness_Div_3']
             rv_prefixes = ['RV_BS_01', 'RV_IP_02', 'RV_SP_03']
             
@@ -203,7 +203,7 @@ if __name__ == "__main__":
                 except:
                     result_dict[prefix] = None
             
-            # 5. 心室功能指标
+                       
             lv_function_keys = ['LV_EDV', 'LV_ESV', 'LV_SV', 'LV_EF', 'LV_CO', 'LV_Mass']
             for key in lv_function_keys:
                 try:
@@ -218,14 +218,14 @@ if __name__ == "__main__":
                 except:
                     result_dict[key] = None
             
-            # 6. 检查是否有任何关键指标缺失
+                              
             critical_metrics = ['LV_EF', 'RV_EF', 'LV_EDV', 'RV_EDV']
             missing_critical = [m for m in critical_metrics if result_dict.get(m) is None]
             
             if missing_critical:
                 print(f"Warning for {id_map}: Missing critical metrics: {missing_critical}")
             
-            # 7. 添加到结果列表
+                        
             result.append(result_dict)
             
         except Exception as e:
@@ -250,7 +250,7 @@ if __name__ == "__main__":
         else:
             return obj
 
-    # 在dump之前转换
+               
     result_serializable = convert_for_json(result)
     # save result to json
     with open("measure_result_v15_fh.json", "w", encoding="utf-8") as f:

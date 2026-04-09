@@ -210,22 +210,22 @@ for _dir in [CACHE_UPLOADS_DIR, CACHE_FRAMES_DIR, CACHE_IMAGES_DIR, CACHE_RESULT
 
 # ============ 报告指标定义（与 src/CMR/calculate.py 严格对齐） ============
 LV_WALL_SEGMENTS = [
-    ("LV_BS", 1, "Basal Anteroseptal", "基底前间隔"),
-    ("LV_BS", 2, "Basal Anterior", "基底前壁"),
-    ("LV_BS", 3, "Basal Lateral", "基底侧壁"),
-    ("LV_BS", 4, "Basal Posterior", "基底后壁"),
-    ("LV_BS", 5, "Basal Inferior", "基底下壁"),
-    ("LV_BS", 6, "Basal Inferoseptal", "基底下间隔"),
-    ("LV_IP", 7, "Mid Anteroseptal", "中间前间隔"),
-    ("LV_IP", 8, "Mid Anterior", "中间前壁"),
-    ("LV_IP", 9, "Mid Lateral", "中间侧壁"),
-    ("LV_IP", 10, "Mid Posterior", "中间后壁"),
-    ("LV_IP", 11, "Mid Inferior", "中间下壁"),
-    ("LV_IP", 12, "Mid Inferoseptal", "中间下间隔"),
-    ("LV_SP", 13, "Apical Anterior", "心尖前壁"),
-    ("LV_SP", 14, "Apical Lateral", "心尖侧壁"),
-    ("LV_SP", 15, "Apical Inferior", "心尖下壁"),
-    ("LV_SP", 16, "Apical Septal", "心尖间隔"),
+    ("LV_BS", 1, "Basal Anteroseptal", "Basal_anteroseptal"),
+    ("LV_BS", 2, "Basal Anterior", "Basal_anterior"),
+    ("LV_BS", 3, "Basal Lateral", "Basal_lateral"),
+    ("LV_BS", 4, "Basal Posterior", "Basal_posterior"),
+    ("LV_BS", 5, "Basal Inferior", "Basal_inferior"),
+    ("LV_BS", 6, "Basal Inferoseptal", "Basal_inferoseptal"),
+    ("LV_IP", 7, "Mid Anteroseptal", "Mid_anteroseptal"),
+    ("LV_IP", 8, "Mid Anterior", "Mid_anterior"),
+    ("LV_IP", 9, "Mid Lateral", "Mid_lateral"),
+    ("LV_IP", 10, "Mid Posterior", "Mid_posterior"),
+    ("LV_IP", 11, "Mid Inferior", "Mid_inferior"),
+    ("LV_IP", 12, "Mid Inferoseptal", "Mid_inferoseptal"),
+    ("LV_SP", 13, "Apical Anterior", "Apical_anterior"),
+    ("LV_SP", 14, "Apical Lateral", "Apical_lateral"),
+    ("LV_SP", 15, "Apical Inferior", "Apical_inferior"),
+    ("LV_SP", 16, "Apical Septal", "Apical_septal"),
 ]
 
 RV_WALL_SEGMENTS = [

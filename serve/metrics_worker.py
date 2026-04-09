@@ -281,22 +281,22 @@ class MetricsWorker:
         
         # 2. LV 壁厚度（16个节段 + 心尖）
         segments_info = [
-            ("LV_BS", 1, "基底前间隔"),
-            ("LV_BS", 2, "基底前壁"),
-            ("LV_BS", 3, "基底侧壁"),
-            ("LV_BS", 4, "基底后壁"),
-            ("LV_BS", 5, "基底下壁"),
-            ("LV_BS", 6, "基底下间隔"),
-            ("LV_IP", 7, "中间前间隔"),
-            ("LV_IP", 8, "中间前壁"),
-            ("LV_IP", 9, "中间侧壁"),
-            ("LV_IP", 10, "中间后壁"),
-            ("LV_IP", 11, "中间下壁"),
-            ("LV_IP", 12, "中间下间隔"),
-            ("LV_SP", 13, "心尖前壁"),
-            ("LV_SP", 14, "心尖侧壁"),
-            ("LV_SP", 15, "心尖下壁"),
-            ("LV_SP", 16, "心尖间隔"),
+            ("LV_BS", 1, "Basal_anteroseptal"),
+            ("LV_BS", 2, "Basal_anterior"),
+            ("LV_BS", 3, "Basal_lateral"),
+            ("LV_BS", 4, "Basal_posterior"),
+            ("LV_BS", 5, "Basal_inferior"),
+            ("LV_BS", 6, "Basal_inferoseptal"),
+            ("LV_IP", 7, "Mid_anteroseptal"),
+            ("LV_IP", 8, "Mid_anterior"),
+            ("LV_IP", 9, "Mid_lateral"),
+            ("LV_IP", 10, "Mid_posterior"),
+            ("LV_IP", 11, "Mid_inferior"),
+            ("LV_IP", 12, "Mid_inferoseptal"),
+            ("LV_SP", 13, "Apical_anterior"),
+            ("LV_SP", 14, "Apical_lateral"),
+            ("LV_SP", 15, "Apical_inferior"),
+            ("LV_SP", 16, "Apical_septal"),
         ]
         
         for prefix, num, name in segments_info:
