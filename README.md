@@ -187,6 +187,15 @@ Place the agent under `weights/agent/` (HuggingFace layout). **Expert checkpoint
 ## Test Data
 
 Download the evaluation set from Hugging Face: **[TaipingQu/CMRAgentEvalSet](https://huggingface.co/datasets/TaipingQu/CMRAgentEvalSet)**.
+### Data Statistics
+| View Folder | File Format | Number of Files | Total Z-axis Dimensions |
+|-------------|-------------|-----------------|-------------------------|
+| 2CH         | .nii.gz     | 203             | 16410                   |
+| 4CH         | .nii.gz     | 205             | 16230                   |
+| SA          | .nii.gz     | 206             | 58313                   |
+| Rest_MPI    | .nii.gz     | 189             | 48391                   |
+| LGE_SA      | .nii.gz     | 200             | 2131                    |
+| Total       | .nii.gz     | 1003            | 141475                  |
 
 After download, data is organized into two categories under the `data/` directory:
 
@@ -202,7 +211,7 @@ Each JSON sample contains an `id`, a list of `image` paths, and multi-turn `conv
 
 ```json
 {
-  "id": "0051270568_cine_4ch_slice_8",
+  "id": "0001183_cine_4ch_slice_8",
   "image": [
     "image/cine/4ch/0001183_4ch_image/slice_8/slice_8_0.png",
     "image/cine/4ch/0001183_4ch_image/slice_8/slice_8_1.png",
@@ -235,6 +244,44 @@ Each JSON sample contains an `id`, a list of `image` paths, and multi-turn `conv
 }
 ```
 
+```json
+{
+    "id": "0000940_cc_cine_2ch_slice_10_cine_4ch_slice_2_cine_sa_slice_23",
+    "image": [
+      "image/nii/4ch/0000940_4ch_image.nii.gz",
+      "image/nii/sa/0000940_sa_image.nii.gz",
+      "image/nii/2ch/0000940_2ch_image.nii.gz"
+    ],
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Based on these cardiac MRI images, can you determine if this is normal heart function, ischemic cardiomyopathy, or non-ischemic cardiomyopathy?\n<image><image><image>"
+      },
+      {
+        "from": "gpt",
+        "thoughts": "Determining the type of cardiomyopathy requires analyzing the specific characteristics present in the image.",
+        "actions": [
+          {
+            "API_name": "Cardiac Disease Screening",
+            "API_params": {}
+          }
+        ],
+        "value": "I will leverage the Cardiac Disease Screening tool to classify this as normal, ischemic, or non-ischemic cardiomyopathy."
+      },
+      {
+        "from": "human",
+        "value": "Cardiac Disease Screening output: Ischemic Cardiomyopathy\n\nAnswer my first question: Based on these cardiac MRI images, can you determine if this is normal heart function, ischemic cardiomyopathy, or non-ischemic cardiomyopathy?"
+      },
+      {
+        "from": "gpt",
+        "thoughts": "The Cardiac Disease Screening results enable me to provide a definitive answer about the cardiomyopathy type.",
+        "actions": [],
+        "value": "According to the Cardiac Disease Screening analysis results, the diagnosis is Ischemic Cardiomyopathy."
+      }
+    ]
+  }
+```
+
 </details>
 
 <details>
@@ -242,7 +289,7 @@ Each JSON sample contains an `id`, a list of `image` paths, and multi-turn `conv
 
 ```json
 {
-  "id": "0052059140_cine_4ch_slice_17",
+  "id": "0001267_cine_4ch_slice_17",
   "image": [
     "image/cine/4ch/0001267_4ch_image/slice_17/slice_17_0.png",
     "image/cine/4ch/0001267_4ch_image/slice_17/slice_17_1.png",
@@ -262,7 +309,27 @@ Each JSON sample contains an `id`, a list of `image` paths, and multi-turn `conv
   ]
 }
 ```
-
+```json
+{
+  "id": "0001474-cine_2ch_slice_24-cine_4ch_slice_8-cine_sa_slice_21",
+  "image": [
+      "image/nii/4ch/0001474_4ch_image.nii.gz",
+      "image/nii/sa/0001474_sa_image.nii.gz"
+  ],
+  "conversations": [
+      {
+          "from": "human",
+          "value": "Can you identify the imaging findings from these images?\n<image><image>"
+      },
+      {
+          "from": "gpt",
+          "thoughts": "I can analyze medical images and provide insightful, clinically relevant responses.",
+          "actions": [],
+          "value": "Detailed analysis reveals thinning of the anterior and lateral walls of the left ventricle from the base to the apex, with overall weakened left ventricular wall motion and reduced systolic function. During systole,bundle-shaped hypointense blood flow extends toward the atrial side in the regions of the mitral and tricuspid valves; during diastole,bundle-shaped hypointense blood flow extends toward the ventricular side in the outflow tract area. A fluid signal intensity shadow is present within the pericardial cavity, suggesting possible pericardial effusion. Additionally, an arc-shaped fluid signal intensity shadow is observed in the left pleural cavity, indicating the presence of pleural effusion."
+      }
+  ]
+}
+```
 </details>
 
 ### Agent Findings Categories
