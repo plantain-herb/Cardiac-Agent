@@ -201,8 +201,13 @@ After download, data is organized into two categories under the `data/` director
 
 | Category | Directory | Description | Format |
 |---|---|---|---|
-| **API Selection** | `data/api/` | Multi-turn conversation samples for API selection: expert API choice, dispatch, and summarizing expert output back to the user | JSON |
-| **Findings Interpretation** | `data/findings/` | Single-turn samples for direct image interpretation and clinical-style findings (e.g., valve status, chamber morphology) without calling any expert API | JSON |
+| **2D API Selection** | `json/api_2D.json/` | Multi-turn conversation samples for 2D API selection: expert API choice, dispatch, and summarizing expert output back to the user | JSON |
+| **3D API Selection** | `json/merged_vqa_cardiac_agent_API_3D.json/` | Multi-turn conversation samples for 3D API selection: expert API choice, dispatch, and summarizing expert output back to the user | JSON |
+| **2D Findings Interpretation** | `json/findings_2D.json/` | Single-turn samples for direct image interpretation and clinical-style findings (e.g., valve status, chamber morphology) without calling any expert API | JSON |
+| **3D Findings Interpretation** | `json/vqa_cardiac_agent_210_test_4CH_Cine_findings_3D.json/` | Single-turn samples for direct image interpretation and clinical-style findings focused on cardiac valve evaluation without calling any expert API | JSON |
+| **3D Findings Interpretation** | `json/vqa_cardiac_agent_210_test_RestMPI_3D.json/` | Single-turn samples for direct image interpretation and clinical-style findings focused on myocardial perfusion assessment without calling any expert API | JSON |
+| **3D Findings Interpretation** | `json/vqa_cardiac_agent_210_test_SAX_Cine_findings_3D.json/` | Single-turn samples for direct image interpretation and clinical-style findings focused on cardiac functional evaluation without calling any expert API | JSON |
+| **3D Findings Interpretation** | `json/vqa_cardiac_agent_210_test_findings_3D.json/` | Single-turn samples for direct image interpretation and comprehensive overall CMR radiological assessment without calling any expert API | JSON |
 
 Each JSON sample contains an `id`, a list of `image` paths, and multi-turn `conversations`. Each GPT turn includes structured `thoughts`, `actions` (API calls, if any), and a natural-language `value`.
 
