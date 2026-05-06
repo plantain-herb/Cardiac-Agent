@@ -197,6 +197,29 @@ Download the evaluation set from Hugging Face: **[TaipingQu/CMRAgentEvalSet](htt
 | LGE_SA      | .nii.gz     | 200             | 2131                    |
 | Total       | .nii.gz     | 1003            | 141475                  |
 
+### Imaging Findings Score
+| Method       | findings_bert_score_precision | findings_bert_score_recall | findings_bert_score_f1 |
+|-------------------------|----------------|----------------|----------------|
+| MedGemma-4B             | 0.789          | 0.829          | 0.809          |
+| Hulumed-4B              | 0.848          | 0.851          | 0.849          |
+| Deepseek-vl2            | 0.824          | 0.835          | 0.829          |
+| HuatuoGPT-Vision-7B     | 0.831          | 0.849          | 0.840          |
+| Hulumed-7B              | 0.850          | 0.850          | 0.850          |
+| Lingshu-7B              | 0.840          | 0.851          | 0.845          |
+| Qwen2.5-VL-7B           | 0.802          | 0.829          | 0.815          |
+| Qwen3-VL-8B             | 0.787          | 0.843          | 0.814          |
+| InternVL3-8B            | 0.805          | 0.829          | 0.816          |
+| Hulumed-14B             | 0.847          | 0.852          | 0.850          |
+| InternVL3-14B           | 0.801          | 0.836          | 0.818          |
+| MedGemma-27B            | 0.786          | 0.840          | 0.812          |
+| Qwen3-VL-30B            | 0.784          | 0.851          | 0.816          |
+| Qwen2.5-VL-32B          | 0.779          | 0.838          | 0.807          |
+| Hulumed-32B             | 0.847          | 0.853          | 0.850          |
+| Lingshu-32B             | 0.839          | 0.852          | 0.845          |
+| HuatuoGPT-Vision-34B    | 0.847          | 0.855          | 0.851          |
+| InternVL3-38B           | 0.809          | 0.841          | 0.825          |
+| BAAI Cardiac Agent-7B      | **0.898**      | **0.896**      | **0.897**      |
+
 After download, data is organized into two categories under the `data/` directory:
 
 | Category | Directory | Description | Format |
