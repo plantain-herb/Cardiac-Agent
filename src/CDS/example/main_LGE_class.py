@@ -1,6 +1,7 @@
 import argparse
 import glob
 import os
+from pathlib import Path
 import sys
 import tarfile
 import traceback
@@ -19,14 +20,21 @@ from infer.predictor_LGE_class import (
 )
 
 
+MODULE_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = MODULE_ROOT.parent.parent
+DATA_ROOT = Path(os.environ.get("CARDIAC_DATA_ROOT", PROJECT_ROOT / "data"))
+OUTPUT_ROOT = Path(os.environ.get("CARDIAC_OUTPUT_ROOT", PROJECT_ROOT / "outputs"))
+WEIGHTS_ROOT = Path(os.environ.get("CARDIAC_WEIGHTS_ROOT", PROJECT_ROOT / "weights"))
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Test segmask_3d")
 
     parser.add_argument("--gpu", default=0, type=int)
     parser.add_argument(
-        "--input_dicom_path", default="/home/can/anzhen/datasets/CMR0515/NII/sec/LGE_4Ch_2Ch",type=str
+        "--input_dicom_path", default=str(DATA_ROOT / "CDS" / "LGE"),type=str
     )
-    parser.add_argument("--output_path", default="/home/can/anzhen/datasets/class_LGE_CINE", type=str)
+    parser.add_argument("--output_path", default=str(OUTPUT_ROOT / "CDS" / "LGE"), type=str)
     parser.add_argument(
         "--model_path",
         default=glob.glob("./data/model/*.tar")[0] if len(glob.glob("./data/model/*.tar")) > 0 else None,
@@ -35,17 +43,17 @@ def parse_args():
     )
     parser.add_argument(
         "--model_cls_file", 
-        default='/home/can/anzhen/datasets/cmr-lge-master/class_checkpoint/LGE_class_v1/epoch_100.pth',
+        default=str(WEIGHTS_ROOT / "diagnosis_first" / "LGE_class.pth"),
         type=str,
     )
     parser.add_argument(
         "--network_cls_file", 
-        default="/home/can/anzhen/datasets/cmr-lge-master/train/config/LGE_class_config.py", 
+        default=str(MODULE_ROOT / "train" / "config" / "LGE_class_config.py"),
         type=str,
     )
     parser.add_argument(
         "--config_file",
-        default="/home/can/anzhen/datasets/cmr-lge-master/example/cls.yaml",
+        default=str(MODULE_ROOT / "example" / "cls.yaml"),
         type=str,
     )
     args = parser.parse_args()

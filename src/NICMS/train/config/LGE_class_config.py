@@ -56,8 +56,8 @@ data = dict(
     dataloader=dict(type="SampleDataLoader", source_batch_size=3, source_thread_count=1, source_prefetch_count=1,),
     train=dict(
         type="LGEClassificationPidReSampleDataset",
-        root="/home/qutaiping/nas/processed_data_LGE_class",
-        dst_list_file="/home/qutaiping/nas/processed_data_LGE_class/train.lst",
+        root="./data/processed_data_LGE_class",
+        dst_list_file="./data/processed_data_LGE_class/train.lst",
         patch_size=patch_size,
         rotation_prob=0.5,
         noise_prob=0.1,
@@ -70,8 +70,8 @@ data = dict(
     ),
     val=dict(
         type="LGE_Cls_ReSampleDataset_Val",
-        root="/home/qutaiping/nas/processed_data_LGE_class/val",
-        dst_list_file="/home/qutaiping/nas/processed_data_LGE_class/val/validation.lst",
+        root="./data/processed_data_LGE_class/val",
+        dst_list_file="./data/processed_data_LGE_class/val/validation.lst",
         patch_size=patch_size,
         rotation_prob=0.0,
         noise_prob=0.0,
@@ -93,7 +93,7 @@ checkpoint_config = dict(interval=1)
 log_config = dict(interval=1, hooks=[dict(type="TextLoggerHook"), dict(type="TensorboardLoggerHook")])
 
 cudnn_benchmark = False
-work_dir = "/home/qutaiping/nas/checkpoints/LGE_class_finetune"
+work_dir = "./checkpoints/LGE_class_finetune"
 gpus = 4
 find_unused_parameters = True
 total_epochs = 100
@@ -104,6 +104,6 @@ dist_params = dict(backend="nccl")
 log_level = "INFO"
 seed = None
 deterministic = False
-resume_from = None # "/home/qutaiping/nas/checkpoints/BLCG_class_flow_newmove_refine/latest.pth"
-load_from = "/home/qutaiping/nas/checkpoints/LGE_class_finetune/latest.pth"
+resume_from = None # "./checkpoints/BLCG_class_flow_newmove_refine/latest.pth"
+load_from = "./checkpoints/LGE_class_finetune/latest.pth"
 workflow = [("train", 1)]

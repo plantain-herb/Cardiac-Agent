@@ -1,6 +1,7 @@
 """infer推理所用的mian文件"""
 import argparse
 import os
+from pathlib import Path
 import sys
 import tarfile
 import time
@@ -16,25 +17,32 @@ except Exception:
     raise
 
 
+MODULE_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = MODULE_ROOT.parent.parent
+DATA_ROOT = Path(os.environ.get("CARDIAC_DATA_ROOT", PROJECT_ROOT / "data"))
+OUTPUT_ROOT = Path(os.environ.get("CARDIAC_OUTPUT_ROOT", PROJECT_ROOT / "outputs"))
+WEIGHTS_ROOT = Path(os.environ.get("CARDIAC_WEIGHTS_ROOT", PROJECT_ROOT / "weights"))
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Test Heart Segmentation")
     parser.add_argument("--gpu", default=0, type=int)
-    # parser.add_argument("--input_path", default="/SMMN-Share/data_share/test_data/lge_sa", type=str)
+    # parser.add_argument("--input_path", default=str(DATA_ROOT / "LGE_SA_SEG" / "input"), type=str)
     # parser.add_argument("--output_path", default="~/demo_outpath", type=str)
     # parser.add_argument("--model_path", default=None, type=str)
-    # parser.add_argument("--model_file_heart_first", default='/SMMN-Share/data_share/test_data/checkpoints/first_LGE_SA/latest.pth', type=str)
-    # parser.add_argument("--model_file_heart_second", default="/SMMN-Share/data_share/test_data/checkpoints/second_LGE_SA/latest.pth", type=str)
-    parser.add_argument("--input_path", default="/home/qutaiping/nas/lh/LGE_SA/test/img", type=str)
-    parser.add_argument("--output_path", default="/home/qutaiping/nas/ori_data/LGE_SA/LGE_SA/test/pred-refine", type=str)
-    # parser.add_argument("--input_path", default="/home/qutaiping/nas/ori_data/HNWB/LGE/dcm", type=str)
-    # parser.add_argument("--output_path", default="/home/qutaiping/nas/ori_data/HNWB/LGE/pred-refine", type=str)
+    # parser.add_argument("--model_file_heart_first", default=str(WEIGHTS_ROOT / "lge_seg_first_SA" / "LGE_SAX_seg1.pth"), type=str)
+    # parser.add_argument("--model_file_heart_second", default=str(WEIGHTS_ROOT / "lge_seg_second_SA" / "LGE_SAX_seg2.pth"), type=str)
+    parser.add_argument("--input_path", default=str(DATA_ROOT / "LGE_SA_SEG" / "input"), type=str)
+    parser.add_argument("--output_path", default=str(OUTPUT_ROOT / "LGE_SA_SEG"), type=str)
+    # parser.add_argument("--input_path", default=str(DATA_ROOT / "LGE_SA_SEG" / "input"), type=str)
+    # parser.add_argument("--output_path", default=str(OUTPUT_ROOT / "LGE_SA_SEG"), type=str)
 
     parser.add_argument("--model_path", default=None, type=str)
-    parser.add_argument("--model_file_heart_first", default='/home/qutaiping/nas/checkpoints/first_LGE_seg_refine_agent/latest.pth', type=str)
-    parser.add_argument("--model_file_heart_second", default="/home/qutaiping/nas/checkpoints/second_LGE_seg_agent160-refine/latest.pth", type=str)
-    parser.add_argument("--network_file_heart_first", default="../train/config/seg_LGE_first_config.py", type=str)
-    parser.add_argument("--network_file_heart_second", type=str, default="../train/config/seg_LGE_second_config.py")
-    parser.add_argument("--config_file", type=str, default='heart_seg.yaml')
+    parser.add_argument("--model_file_heart_first", default=str(WEIGHTS_ROOT / "lge_seg_first_SA" / "LGE_SAX_seg1.pth"), type=str)
+    parser.add_argument("--model_file_heart_second", default=str(WEIGHTS_ROOT / "lge_seg_second_SA" / "LGE_SAX_seg2.pth"), type=str)
+    parser.add_argument("--network_file_heart_first", default=str(MODULE_ROOT / "train" / "config" / "seg_LGE_first_config.py"), type=str)
+    parser.add_argument("--network_file_heart_second", type=str, default=str(MODULE_ROOT / "train" / "config" / "seg_LGE_second_config.py"))
+    parser.add_argument("--config_file", type=str, default=str(MODULE_ROOT / "example" / "heart_seg.yaml"))
     args = parser.parse_args()
     return args
 

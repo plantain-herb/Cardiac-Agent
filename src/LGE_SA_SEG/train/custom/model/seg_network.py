@@ -45,11 +45,11 @@ class Seg_Network_Heart(nn.Module):
         # name = time.time()
         # sitk.WriteImage(
         #     sitk.GetImageFromArray(img[0, 0].detach().cpu().float().numpy()),
-        #     f"/home/ltiecheng/Solutions/seg_liver/train/debug/{name}_vol.nii.gz",
+        #     f"./debug/{name}_vol.nii.gz",
         # )
         # sitk.WriteImage(
         #     sitk.GetImageFromArray(liver[0, 0].detach().cpu().float().numpy()),
-        #     f"/home/ltiecheng/Solutions/seg_liver/train/debug/{name}_mask-seg.nii.gz",
+        #     f"./debug/{name}_mask-seg.nii.gz",
         # )
         # raise
         # ############## debug ##############

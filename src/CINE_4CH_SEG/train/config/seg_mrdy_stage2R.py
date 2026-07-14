@@ -80,8 +80,8 @@ data = dict(
     ),
     train=dict(
         type='DYPyramid_Sample_Dataset',
-        dst_list_file='/home/qutaiping/nas/processed_data/processed_4CH_dy_stage2_R/train.lst',
-        data_root="/home/qutaiping/nas/processed_data/processed_4CH_dy_stage2_R",
+        dst_list_file='./data/processed_data/processed_4CH_dy_stage2_R/train.lst',
+        data_root="./data/processed_data/processed_4CH_dy_stage2_R",
         patch_size=patch_size,
         patch_size_inner=patch_size_inner,
         # win_level=win_level,
@@ -112,7 +112,7 @@ log_config = dict(interval=1, hooks=[dict(type='TextLoggerHook'), dict(type='Ten
 
 cudnn_benchmark = False
 # work_dir = './checkpoints/second_dy_sp075'
-work_dir = '/home/qutaiping/nas/checkpoints/4CH_dy_second2_R'
+work_dir = './checkpoints/4CH_dy_second2_R'
 # work_dir = './checkpoints/second_dy_sp075_win350'
 # work_dir = './checkpoints/second_dy_sp025_win350'
 gpus = 1
@@ -125,6 +125,6 @@ dist_params = dict(backend='nccl')
 log_level = 'INFO'
 seed = None
 deterministic = False
-resume_from = None# "/home/qutaiping/nas/cmr_heart_models2/train/checkpoints/4CH_dy_second1/epoch_60.pth" #"./checkpoints/second/m4.0.13_pretrain_4.0.3/latest.pth"
-load_from = '/home/qutaiping/nas/checkpoints/4CH_dy_second2_R/latest.pth'
+resume_from = None# "./checkpoints/4CH_dy_second1/epoch_60.pth" #"./checkpoints/second/m4.0.13_pretrain_4.0.3/latest.pth"
+load_from = './checkpoints/4CH_dy_second2_R/latest.pth'
 workflow = [('train', 1)]

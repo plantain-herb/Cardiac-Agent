@@ -57,8 +57,8 @@ data = dict(
     dataloader=dict(type="SampleDataLoader", source_batch_size=3, source_thread_count=1, source_prefetch_count=2,),
     train=dict(
         type="SegDY_Sample_Dataset",
-        dst_list_file='/home/taiping-qu/code/mr_heart_seg_thin/train/train_data/processed_data_dy_stage1/train.lst',
-        data_root="/home/taiping-qu/code/mr_heart_seg_thin/train/train_data/processed_data_dy_stage1",
+        dst_list_file='./data/processed_data_dy_stage1/train.lst',
+        data_root="./data/processed_data_dy_stage1",
         isotropy_spacing=isotropy_spacing,
         # win_level=win_level,
         # win_width=win_width,

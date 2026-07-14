@@ -1,3 +1,10 @@
+import os
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+DATA_ROOT = Path(os.environ.get("CARDIAC_DATA_ROOT", PROJECT_ROOT / "data"))
+CHECKPOINT_ROOT = Path(os.environ.get("CARDIAC_CHECKPOINT_ROOT", PROJECT_ROOT / "checkpoints"))
+
 trainner = dict(type="Trainner", runner_config=dict(type="EpochBasedRunner"))
 patch_size_sa = [288, 128, 128]
 patch_size_24 = [80, 120, 120]
@@ -28,9 +35,9 @@ model = dict(
         dict(
             type="Aug3dMini",
             aug_parameters=dict(
-                rot_range_x=[-5, 5, 1.0], 
-                rot_range_y=[-5, 5, 1.0],
-                rot_range_z=[-5, 5, 1.0],
+                rot_range_x=[-15, 15, 1.0],
+                rot_range_y=[-15, 15, 1.0],
+                rot_range_z=[-15, 15, 1.0],
                 scale_range_x=[0.9, 1.1, 1.0],
                 scale_range_y=[0.9, 1.1, 1.0],
                 scale_range_z=[0.9, 1.1, 1.0],
@@ -58,8 +65,8 @@ data = dict(
     dataloader=dict(type="SampleDataLoader", source_batch_size=3, source_thread_count=1, source_prefetch_count=1,),
     train=dict(
         type="CineClassificationPidReSampleDataset",
-        root="/home/qutaiping/nas/processed_data/processed_data_diag_first/train",
-        dst_list_file="/home/qutaiping/nas/processed_data/processed_data_diag_first/train/train5.lst",
+        root=str(DATA_ROOT / "CDS"),
+        dst_list_file=str(DATA_ROOT / "CDS" / "train_fold{fold}.lst"),
         patch_size_24=patch_size_24,
         patch_size_sa=patch_size_sa,
         # patch_size=patch_size,
@@ -73,8 +80,8 @@ data = dict(
     ),
     val=dict(
         type="Cine_Cls_ReSampleDataset_Val",
-        root="/home/qutaiping/nas/processed_data/processed_data_diag_first/val",
-        dst_list_file="/home/qutaiping/nas/processed_data/processed_data_diag_first/val/val.lst",
+        root=str(DATA_ROOT / "CDS"),
+        dst_list_file=str(DATA_ROOT / "CDS" / "val_fold{fold}.lst"),
         patch_size_24=patch_size_24,
         patch_size_sa=patch_size_sa,
         # patch_size=patch_size,
@@ -97,7 +104,7 @@ checkpoint_config = dict(interval=1)
 log_config = dict(interval=1, hooks=[dict(type="TextLoggerHook"), dict(type="TensorboardLoggerHook")])
 
 cudnn_benchmark = False
-work_dir = "/home/qutaiping/nas/checkpoints/diagnosis_first_test"
+work_dir = str(CHECKPOINT_ROOT / "diagnosis_first_5fold" / "fold{fold}")
 gpus = 1
 find_unused_parameters = True
 total_epochs = 60

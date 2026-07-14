@@ -4,6 +4,7 @@ import os
 import sys
 import tarfile
 import traceback
+from pathlib import Path
 
 import time
 import numpy as np
@@ -18,13 +19,20 @@ from infer.predictor_cine_class import (
     CineClassificationPredictor,
 )
 
+MODULE_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = MODULE_ROOT.parent.parent
+DATA_ROOT = Path(os.environ.get("CARDIAC_DATA_ROOT", PROJECT_ROOT / "data"))
+OUTPUT_ROOT = Path(os.environ.get("CARDIAC_OUTPUT_ROOT", PROJECT_ROOT / "outputs"))
+WEIGHTS_ROOT = Path(os.environ.get("CARDIAC_WEIGHTS_ROOT", PROJECT_ROOT / "weights"))
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Test segmask_3d")
 
     parser.add_argument("--gpu", default=0, type=int)
-    parser.add_argument("--input_path", default="/home/qutaiping/nas/ori_data/diagnosis_second/split_datasets/test",type=str)
-    parser.add_argument("--output_path", default="/home/qutaiping/nas/code/heart_diagnosis/results", type=str)
+    parser.add_argument("--lst_file", default=str(DATA_ROOT / "NICMS" / "val_fold5.lst"), type=str)
+    parser.add_argument("--patients_root", default=str(DATA_ROOT / "NICMS" / "patients"), type=str)
+    parser.add_argument("--output_path", default=str(OUTPUT_ROOT / "NICMS"), type=str)
     parser.add_argument(
         "--model_path",
         default=glob.glob("./data/model/*.tar")[0] if len(glob.glob("./data/model/*.tar")) > 0 else None,
@@ -33,22 +41,22 @@ def parse_args():
     )
     parser.add_argument(
         "--model_cls_file", 
-        default='/home/qutaiping/nas/checkpoints/diagnosis_second_refine/epoch_39.pth',
+        default=str(WEIGHTS_ROOT / "diagnosis_second" / "NICMS.pth"),
         type=str,
     )
     parser.add_argument(
         "--network_cls_file", 
-        default="/home/qutaiping/nas/code/heart_diagnosis/train/config/cine_class_config.py", 
+        default=str(MODULE_ROOT / "train" / "config" / "cine_class_config.py"),
         type=str,
     )
     parser.add_argument(
         "--config_file", 
-        default="/home/qutaiping/nas/code/heart_diagnosis/example/cls.yaml",
+        default=str(MODULE_ROOT / "example" / "cls.yaml"),
         type=str, 
     )
     parser.add_argument(
         "--csv_path",
-        default="/home/qutaiping/nas/zhaocan/heart_diagnosis/diag_second_data.csv",
+        default=str(DATA_ROOT / "NICMS" / "labels.csv"),
         type=str,
         help="Path to the ground truth labels CSV file",
     )
@@ -96,7 +104,7 @@ def calculate_accuracy(predictions, gt_labels):
     return accuracy
 
 
-def main(input_path, output_path, gpu, args):
+def main(patients_root, output_path, gpu, args):
 
     # Load ground truth labels
     gt_labels_path = args.csv_path
@@ -114,55 +122,54 @@ def main(input_path, output_path, gpu, args):
 
 
     os.makedirs(output_path, exist_ok=True)
-    patient_cls={}
+    # result = {"id":[], "pred_cls": [], "gt":[], "pred_prob":[]}
+    result = {"id":[], "pred_cls": [], "gt":[], "avg_pred": [], "preds_prob":[]}
 
-    #df = pandas.read_excel(gt_labels_path).set_index(["pid"])
-    result = {"id":[], "pred_cls": [], "gt":[], "pred_prob":[]}
+    # 读取lst文件，提取唯一id
+    with open(args.lst_file, 'r') as f:
+        ids = set()
+        for line in f:
+            line = line.strip()
+            if line:
+                fname = os.path.basename(line)
+                if fname.endswith('.npz'):
+                    id_str = fname[:-4].zfill(7)
+                    ids.add(id_str)
 
-    for patient_dir in tqdm(os.listdir(input_path)):
-        print(f"processing {patient_dir}")
-
-        id = patient_dir
-        cls_dict={}
-        # try:
-        cls_path = os.path.join(input_path, patient_dir)
-        
-        # sitk_img = load_scans(cls_path)
-        # hu_volume = sitk.GetArrayFromImage(sitk_img)
-
+    for id in tqdm(sorted(ids)):
+        patient_dir = os.path.join(patients_root, id)
+        if not os.path.isdir(patient_dir):
+            print(f"Warning: patient dir not found: {patient_dir}")
+            continue
         nii_files = sorted([
-            os.path.join(cls_path, f) for f in os.listdir(cls_path)
-            if f.endswith('.nii.gz')
+            os.path.join(patient_dir, f) for f in os.listdir(patient_dir)
+            if f.endswith('.nii') or f.endswith('.nii.gz')
         ])
         if len(nii_files) != 3:
-            print(f"Warning: {id} has {len(nii_files)} files, expected 3.")
+            print(f"Warning: {id} has {len(nii_files)} nii files, expected 3.")
             continue
 
         vols = []
         for nii_file in nii_files:
             sitk_img = load_scans(nii_file)
             vol = sitk.GetArrayFromImage(sitk_img)
-            vols.append(vol.astype(np.float32))     # vols[0]: 4ch, vols[1]: sa, vols[2]: lge
+            vols.append(vol.astype(np.float32))
 
         # pred = inference(predictor_segUrinary_vessel, vols)
+        # pred_num = np.argmax(pred, 0)
         preds, avg_pred = inference(predictor_segUrinary_vessel, vols, num_crops=3)
         pred_num = np.argmax(avg_pred, 0)
         
         result["id"].append(id)
         result["pred_cls"].append(pred_num)
         result["gt"].append(gt_labels.get(id, -1))
-        result["preds_prob"].append(preds)
-        result["avg_pred"].append(avg_pred) 
+        # result["pred_prob"].append(pred)
+        result["avg_pred"].append(avg_pred)
+        result["preds_prob"].append(preds) # shape=[num_crops, num_classes]
 
-
-        # patient_cls[patient_dir] = cls_dict
-        # except:  # noqa: E722
-        #     break
-    
     result_df = pandas.DataFrame(result)
-    result_df.to_csv(os.path.join(output_path, "second_test3.csv"), index=False)
+    result_df.to_csv(os.path.join(output_path, "fold5_val.csv"), index=False)
 
-    # Calculate accuracy
     accuracy = calculate_accuracy(result_df, gt_labels)
     print(f"Accuracy: {accuracy:.4f}")
 
@@ -179,7 +186,7 @@ def read_cls_data(path: str):
 if __name__ == "__main__":
     args = parse_args()
     main(
-        input_path=args.input_path,
+        patients_root=args.patients_root,
         output_path=args.output_path,
         gpu=args.gpu,
         args=args,

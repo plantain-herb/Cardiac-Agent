@@ -779,7 +779,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--network-cls-file",
         type=str,
-        default=os.path.join(MODEL_BASE_DIR, "train/config/cine_class_config_5fold.py"),
+        default=os.path.join(MODEL_BASE_DIR, "train/config/cine_class_config.py"),
     )
     parser.add_argument(
         "--config-file",

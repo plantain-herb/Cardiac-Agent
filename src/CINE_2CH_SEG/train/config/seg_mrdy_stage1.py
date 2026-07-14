@@ -46,8 +46,8 @@ data = dict(
     dataloader=dict(type="SampleDataLoader", source_batch_size=3, source_thread_count=1, source_prefetch_count=2,),
     train=dict(
         type="SegDY_Sample_Dataset",
-        dst_list_file='/home/qutaiping/nas/processed_data/processed_2CH_dy_stage1/train.lst',
-        data_root="/home/qutaiping/nas/processed_data/processed_2CH_dy_stage1",
+        dst_list_file='./data/processed_data/processed_2CH_dy_stage1/train.lst',
+        data_root="./data/processed_data/processed_2CH_dy_stage1",
         isotropy_spacing=isotropy_spacing,
         # win_level=win_level,
         # win_width=win_width,
@@ -70,7 +70,7 @@ checkpoint_config = dict(interval=1)  # save epoch
 log_config = dict(interval=1, hooks=[dict(type="TextLoggerHook"), dict(type="TensorboardLoggerHook")])
 
 cudnn_benchmark = False
-work_dir = "/home/qutaiping/nas/checkpoints/4CH_dy_first1_refine"
+work_dir = "./checkpoints/4CH_dy_first1_refine"
 gpus = 1
 find_unused_parameters = True
 total_epochs = 100

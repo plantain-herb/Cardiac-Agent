@@ -19,19 +19,26 @@ except Exception:
     raise
 
 
+MODULE_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = MODULE_ROOT.parent.parent
+DATA_ROOT = Path(os.environ.get("CARDIAC_DATA_ROOT", PROJECT_ROOT / "data"))
+OUTPUT_ROOT = Path(os.environ.get("CARDIAC_OUTPUT_ROOT", PROJECT_ROOT / "outputs"))
+WEIGHTS_ROOT = Path(os.environ.get("CARDIAC_WEIGHTS_ROOT", PROJECT_ROOT / "weights"))
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Test Heart Segmentation")
     parser.add_argument("--gpu", default=2, type=int)
-    # parser.add_argument("--input_path", default="/SMMN-Share/data_share/test_data/cine_seg_2ch/img", type=str)
-    # parser.add_argument("--output_path", default="/SMMN-Share/data_share/test_data/cine_seg_2ch/pre", type=str)
-    parser.add_argument("--input_path", default="/home/qutaiping/nas/HYH/CINE_2ch", type=str)
-    parser.add_argument("--output_path", default="/home/qutaiping/nas/HYH/CINE_2ch_pred", type=str)
+    # parser.add_argument("--input_path", default=str(DATA_ROOT / "CINE_2CH_SEG" / "input"), type=str)
+    # parser.add_argument("--output_path", default=str(OUTPUT_ROOT / "CINE_2CH_SEG"), type=str)
+    parser.add_argument("--input_path", default=str(DATA_ROOT / "CINE_2CH_SEG" / "input"), type=str)
+    parser.add_argument("--output_path", default=str(OUTPUT_ROOT / "CINE_2CH_SEG"), type=str)
     parser.add_argument("--model_path", default=None, type=str)
-    parser.add_argument("--model_file_DY_first", default='/SMMN-Share/data_share/test_data/checkpoints/cine_seg_first_2CH/latest.pth', type=str)
-    parser.add_argument("--model_file_DY_second", default="/SMMN-Share/data_share/test_data/checkpoints/cine_seg_second_2CH/latest.pth", type=str)
-    parser.add_argument("--network_file_DY_first", default="train/config/seg_mrdy_stage1.py", type=str)
-    parser.add_argument("--network_file_DY_second", type=str, default="train/config/seg_mrdy_stage2.py")
-    parser.add_argument("--config_file", type=str, default='example/heart_seg.yaml')
+    parser.add_argument("--model_file_DY_first", default=str(WEIGHTS_ROOT / "cine_seg_first_2CH" / "Cine_2CH_seg1.pth"), type=str)
+    parser.add_argument("--model_file_DY_second", default=str(WEIGHTS_ROOT / "cine_seg_second_2CH" / "Cine_2CH_seg2.pth"), type=str)
+    parser.add_argument("--network_file_DY_first", default=str(MODULE_ROOT / "train" / "config" / "seg_mrdy_stage1.py"), type=str)
+    parser.add_argument("--network_file_DY_second", type=str, default=str(MODULE_ROOT / "train" / "config" / "seg_mrdy_stage2.py"))
+    parser.add_argument("--config_file", type=str, default=str(MODULE_ROOT / "example" / "heart_seg.yaml"))
     args = parser.parse_args()
     return args
 

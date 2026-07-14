@@ -1,3 +1,10 @@
+import os
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+DATA_ROOT = Path(os.environ.get("CARDIAC_DATA_ROOT", PROJECT_ROOT / "data"))
+CHECKPOINT_ROOT = Path(os.environ.get("CARDIAC_CHECKPOINT_ROOT", PROJECT_ROOT / "checkpoints"))
+
 trainner = dict(type="Trainner", runner_config=dict(type="EpochBasedRunner"))
 patch_size_sa = [288, 128, 128]
 patch_size_24 = [80, 120, 120]
@@ -34,6 +41,7 @@ model = dict(
 train_cfg = None
 test_cfg = None
 
+# fold = 0 # 5折
 # 使用SampleDataLoader时使用
 data = dict(
     imgs_per_gpu=8, #bs
@@ -43,8 +51,8 @@ data = dict(
     dataloader=dict(type="SampleDataLoader", source_batch_size=3, source_thread_count=1, source_prefetch_count=1,),
     train=dict(
         type="CineClassificationPidReSampleDataset",
-        root="/home/qutaiping/nas/processed_data/processed_data_diag_second/train",
-        dst_list_file="/home/qutaiping/nas/processed_data/processed_data_diag_second/train/train1.lst",
+        root=str(DATA_ROOT / "NICMS"),
+        dst_list_file=str(DATA_ROOT / "NICMS" / "train_fold{fold}.lst"),
         patch_size_24=patch_size_24,
         patch_size_sa=patch_size_sa,
         patch_size_lge=patch_size_lge,
@@ -58,8 +66,8 @@ data = dict(
     ),
     val=dict(
         type="Cine_Cls_ReSampleDataset_Val",
-        root="/home/qutaiping/nas/processed_data/processed_data_diag_second/val",
-        dst_list_file="/home/qutaiping/nas/processed_data/processed_data_diag_second/val/val.lst",
+        root=str(DATA_ROOT / "NICMS"),
+        dst_list_file=str(DATA_ROOT / "NICMS" / "val_fold{fold}.lst"),
         patch_size_24=patch_size_24,
         patch_size_sa=patch_size_sa,
         patch_size_lge=patch_size_lge,
@@ -82,7 +90,7 @@ checkpoint_config = dict(interval=1)
 log_config = dict(interval=1, hooks=[dict(type="TextLoggerHook"), dict(type="TensorboardLoggerHook")])
 
 cudnn_benchmark = False
-work_dir = "/home/qutaiping/nas/checkpoints/diagnosis_first_test"
+work_dir = str(CHECKPOINT_ROOT / "diagnosis_second_5fold_refine2" / "fold{fold}")
 gpus = 1
 find_unused_parameters = True
 total_epochs = 60

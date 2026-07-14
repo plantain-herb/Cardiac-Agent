@@ -50,8 +50,8 @@ data = dict(
     dataloader=dict(type="SampleDataLoader", source_batch_size=3, source_thread_count=1, source_prefetch_count=2,),
     train=dict(
         type="Seg_Sample_Dataset2d",
-        dst_list_file='/home/qutaiping/nas/processed_data/processed_data_LGE_SA_second_stage/train.lst',
-        data_root="/home/qutaiping/nas/processed_data/processed_data_LGE_SA_second_stage",
+        dst_list_file='./data/processed_data/processed_data_LGE_SA_second_stage/train.lst',
+        data_root="./data/processed_data/processed_data_LGE_SA_second_stage",
         patch_size=patch_size,
         patch_size_inner=patch_size_inner,
         rotation_prob=0.95,
@@ -73,7 +73,7 @@ checkpoint_config = dict(interval=1)  # save epoch
 log_config = dict(interval=1, hooks=[dict(type="TextLoggerHook"), dict(type="TensorboardLoggerHook")])
 
 cudnn_benchmark = False
-work_dir = "/home/qutaiping/nas/checkpoints/second_LGE_seg_agent"
+work_dir = "./checkpoints/second_LGE_seg_agent"
 gpus = 4
 find_unused_parameters = True
 total_epochs = 400
@@ -86,5 +86,5 @@ seed = None
 deterministic = False
 # resume_from = "checkpoints/liver_raw_0728/latest.pth"
 resume_from = None
-load_from = "/home/qutaiping/nas/checkpoints/second_LGE_seg/latest.pth"
+load_from = "./checkpoints/second_LGE_seg/latest.pth"
 workflow = [("train", 1)]

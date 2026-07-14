@@ -65,8 +65,8 @@ data = dict(
     ),
     train=dict(
         type='DYPyramid_Sample_Dataset',
-        dst_list_file='/home/qutaiping/nas/processed_data/processed_SA_dy_stage2/train.lst',
-        data_root="/home/qutaiping/nas/processed_data/processed_SA_dy_stage2",
+        dst_list_file='./data/processed_data/processed_SA_dy_stage2/train.lst',
+        data_root="./data/processed_data/processed_SA_dy_stage2",
         patch_size=patch_size,
         patch_size_inner=patch_size_inner,
         # win_level=win_level,
@@ -96,7 +96,7 @@ checkpoint_config = dict(interval=1)
 log_config = dict(interval=1, hooks=[dict(type='TextLoggerHook'), dict(type='TensorboardLoggerHook')])
 
 cudnn_benchmark = False
-work_dir = '/home/qutaiping/nas/checkpoints/SA_dy_second2'
+work_dir = './checkpoints/SA_dy_second2'
 gpus = 1
 find_unused_parameters = True
 total_epochs = 45
@@ -109,5 +109,5 @@ seed = None
 deterministic = False
 resume_from = None #"./checkpoints/second/m4.0.13_pretrain_4.0.3/latest.pth"
 #load_from = "./checkpoints/secondm4.0.6_2/epoch_188.pth"
-load_from = '/home/qutaiping/nas/checkpoints/SA_dy_second2/latest.pth'
+load_from = './checkpoints/SA_dy_second2/latest.pth'
 workflow = [('train', 1)]

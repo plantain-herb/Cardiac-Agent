@@ -45,7 +45,7 @@ class InfarClassification_Network(nn.Module):
         # si = vol[0, 0].cpu().numpy()
         # si = si.astype(np.uint8)
         # si = sitk.GetImageFromArray(si)
-        # sitk.WriteImage(si, '/home/taiping-qu/code/mr_heart_seg_thin/train/train_data/ori_data/grad_cam_output2/vol1.nii.gz')
+        # sitk.WriteImage(si, './data/ori_data/grad_cam_output2/vol1.nii.gz')
 
         # 多加一类
         outs_cls, deep_sup_cls = self.backbone(vol)

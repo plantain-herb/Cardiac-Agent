@@ -1,6 +1,7 @@
 """infer推理所用的mian文件"""
 import argparse
 import os
+from pathlib import Path
 import sys
 import tarfile
 import time
@@ -15,18 +16,25 @@ except Exception:
     raise
 
 
+MODULE_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = MODULE_ROOT.parent.parent
+DATA_ROOT = Path(os.environ.get("CARDIAC_DATA_ROOT", PROJECT_ROOT / "data"))
+OUTPUT_ROOT = Path(os.environ.get("CARDIAC_OUTPUT_ROOT", PROJECT_ROOT / "outputs"))
+WEIGHTS_ROOT = Path(os.environ.get("CARDIAC_WEIGHTS_ROOT", PROJECT_ROOT / "weights"))
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Test Heart Segmentation")
     parser.add_argument("--gpu", default=0, type=int)
-    parser.add_argument("--input_path", default="/SMMN-Share/data_share/test_data/cine_sa", type=str)
+    parser.add_argument("--input_path", default=str(DATA_ROOT / "CINE_SA_SEG" / "input"), type=str)
     parser.add_argument("--output_path", default="output", type=str)
     parser.add_argument("--model_path", default=None, type=str)
-    parser.add_argument("--model_file_DY_first", default='/SMMN-Share/data_share/test_data/checkpoints/first_SA/latest.pth', type=str)
-    parser.add_argument("--model_file_DY_second", default="/SMMN-Share/data_share/test_data/checkpoints/second_SA/latest.pth", type=str)
-    parser.add_argument("--network_file_DY_first", default="cmr_heart_models/train/config/seg_mrdy_stage1.py", type=str)
-    parser.add_argument("--network_file_DY_second", type=str, default="cmr_heart_models/train/config/seg_mrdy_stage2.py")
+    parser.add_argument("--model_file_DY_first", default=str(WEIGHTS_ROOT / "cine_seg_first_SA" / "Cine_SAX_seg1.pth"), type=str)
+    parser.add_argument("--model_file_DY_second", default=str(WEIGHTS_ROOT / "cine_seg_second_SA" / "Cine_SAX_seg2.pth"), type=str)
+    parser.add_argument("--network_file_DY_first", default=str(MODULE_ROOT / "train" / "config" / "seg_mrdy_stage1.py"), type=str)
+    parser.add_argument("--network_file_DY_second", type=str, default=str(MODULE_ROOT / "train" / "config" / "seg_mrdy_stage2.py"))
 
-    parser.add_argument("--config_file", type=str, default='cmr_heart_models/example/heart_seg.yaml')
+    parser.add_argument("--config_file", type=str, default=str(MODULE_ROOT / "example" / "heart_seg.yaml"))
     args = parser.parse_args()
     return args
 
@@ -96,7 +104,7 @@ else:
 # )
     # print("successfully run the main_seg function")
     
-# input_path = "/SMMN-Share/data_share/test_data/cine_sa/AZ192068_SBPW_ALLS.nii.gz"
+# input_path = str(DATA_ROOT / "CINE_SA_SEG" / "input" / "example.nii.gz")
 # main_seg(input_path)
 
 

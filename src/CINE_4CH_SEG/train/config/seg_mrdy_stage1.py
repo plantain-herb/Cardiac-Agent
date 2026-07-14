@@ -57,8 +57,8 @@ data = dict(
     dataloader=dict(type="SampleDataLoader", source_batch_size=3, source_thread_count=1, source_prefetch_count=2,),
     train=dict(
         type="SegDY_Sample_Dataset",
-        dst_list_file='/home/qutaiping/nas/cmr_heart_models2/processed_data/processed_4CH_dy_stage1/train.lst',
-        data_root="/home/qutaiping/nas/cmr_heart_models2/processed_data/processed_4CH_dy_stage1",
+        dst_list_file='./data/processed_data/processed_4CH_dy_stage1/train.lst',
+        data_root="./data/processed_data/processed_4CH_dy_stage1",
         isotropy_spacing=isotropy_spacing,
         # win_level=win_level,
         # win_width=win_width,
