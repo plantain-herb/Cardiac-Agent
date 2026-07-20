@@ -461,8 +461,8 @@ if __name__ == "__main__":
     
     # Server configuration
     parser.add_argument("--host", type=str, default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=21010)
-    parser.add_argument("--worker-address", type=str, default="http://localhost:21010")
+    parser.add_argument("--port", type=int, default=21011)
+    parser.add_argument("--worker-address", type=str, default="http://localhost:21011")
     parser.add_argument("--controller-address", type=str, default="http://localhost:20001")
     
     # Model configuration
