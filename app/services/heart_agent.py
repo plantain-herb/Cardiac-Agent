@@ -28,6 +28,7 @@ from app.utils.dicom import (
     convert_dcm_to_nifti,
     extract_frames_from_volume,
     get_clean_seg_name,
+    get_slice_num_from_path,
     load_scans,
     save_segmentation_images,
 )
@@ -55,12 +56,74 @@ class HeartMRIAgent:
         self.agent_client = LLaVAAgentClient()
         self.expert_client = ExpertWorkerClient()
         self.seq_identifier = ParallelSequenceIdentifier(self.expert_client)
+
+    @staticmethod
+    def _get_explicit_api_request(question: str) -> str:
+        """Return a deterministic API for requests whose intent is unambiguous.
+
+        The multimodal agent remains responsible for ambiguous requests. Explicit
+        report/metric commands must not fall back to VQA, because those workflows
+        create the segmentation masks and correction context used by the UI.
+        """
+        normalized = re.sub(r"\s+", " ", (question or "").strip().lower())
+        if not normalized:
+            return None
+
+        report_requested = (
+            "report" in normalized
+            and any(
+                verb in normalized
+                for verb in ("generate", "create", "prepare", "produce")
+            )
+        ) or (
+            "报告" in normalized
+            and any(verb in normalized for verb in ("生成", "创建", "制作", "出一份"))
+        )
+        if report_requested:
+            return "Medical Report Generation"
+
+        metrics_requested = (
+            any(term in normalized for term in ("cardiac metrics", "heart metrics"))
+            and any(
+                verb in normalized
+                for verb in ("calculate", "compute", "recalculate", "measure")
+            )
+        ) or (
+            any(term in normalized for term in ("心脏指标", "心功能指标"))
+            and any(verb in normalized for verb in ("计算", "重算", "测量"))
+        )
+        if metrics_requested:
+            return "Cardiac Metrics Calculation"
+
+        return None
+
+    @staticmethod
+    def _get_filename_sequence(original_name: str) -> str:
+        """Infer a sequence only when the upload filename is explicit.
+
+        This is a fallback for failed visual sequence identification. Token-based
+        matching avoids treating arbitrary substrings in patient filenames as a
+        modality. LGE takes precedence over the generic short-axis marker.
+        """
+        normalized = re.sub(r"[_\-.]+", " ", (original_name or "").lower())
+        tokens = set(re.findall(r"[a-z0-9]+", normalized))
+
+        if "lge" in tokens or "late gadolinium" in normalized:
+            return "lge sa"
+        if tokens & {"2ch", "2c", "twoch"} or "two chamber" in normalized:
+            return "cine 2ch"
+        if tokens & {"4ch", "4c", "fourch"} or "four chamber" in normalized:
+            return "cine 4ch"
+        if tokens & {"sa", "sax"} or "short axis" in normalized:
+            return "cine sa"
+
+        return "unknown"
     
     def _build_feedback_prompt(self, api_name: str, expert_result: Dict, question: str) -> str:
         """构建第二次Agent调用的prompt"""
         if "error" in expert_result:
             result_str = f"{{'error': '{expert_result['error']}'}}"
-        elif api_name == "Medical Report Generation" and "metrics" in expert_result:
+        elif api_name in ("Medical Report Generation", "Cardiac Metrics Calculation") and "metrics" in expert_result:
             metrics = expert_result.get("metrics", {})
             key_metrics = {
                 "LV_EF": metrics.get("LV_EF"),
@@ -273,6 +336,87 @@ class HeartMRIAgent:
                 return "elevated"
         
         return "normal"
+
+    def register_metric_correction_workflow(
+        self,
+        session_id: str,
+        mask_4ch_path: str,
+        mask_sa_path: str,
+        slice_num_4ch: int,
+        slice_num_sa: int,
+        image_sa_path: str = None,
+        mask_lge_sa_path: str = None,
+        cds_result: Dict = None,
+        nicms_result: Dict = None,
+    ) -> Dict:
+        """保存可重算上下文，并返回不暴露服务器绝对路径的前端契约。"""
+        session_mgr = get_session_manager()
+        context = {
+            "mask_4ch_path": mask_4ch_path,
+            "mask_sa_path": mask_sa_path,
+            "slice_num_4ch": slice_num_4ch,
+            "slice_num_sa": slice_num_sa,
+            "image_sa_path": image_sa_path,
+            "mask_lge_sa_path": mask_lge_sa_path,
+            "cds_result": cds_result,
+            "nicms_result": nicms_result,
+        }
+        session_mgr.set_metric_correction_context(session_id, context)
+        return self.build_metric_correction_workflow(session_id, context)
+
+    def build_metric_correction_workflow(self, session_id: str, context: Dict) -> Dict:
+        masks = []
+        for modality, label, allowed in [
+            ("4ch", "4CH Segmentation", "0–6"),
+            ("sa", "SA Segmentation", "0–4"),
+        ]:
+            path = context[f"mask_{modality}_path"]
+            filename = os.path.basename(path)
+            masks.append({
+                "modality": modality,
+                "label": label,
+                "filename": filename,
+                "download_url": f"/api/download/{session_id}/segmentation/{filename}",
+                "allowed_labels": allowed,
+            })
+        return {
+            "enabled": True,
+            "endpoint": "/api/metrics/recalculate",
+            "message": (
+                "Download the automatic masks, correct them while preserving NIfTI geometry, "
+                "then upload either or both masks to recalculate without rerunning segmentation."
+            ),
+            "masks": masks,
+        }
+
+    def recalculate_from_corrected_masks(
+        self,
+        context: Dict,
+        mask_4ch_path: str,
+        mask_sa_path: str,
+    ) -> Dict:
+        """基于修正 mask 重算指标，并保留首轮分类结果用于报告展示。"""
+        result = self.expert_client.recalculate_metrics(
+            mask_4ch=mask_4ch_path,
+            mask_sa=mask_sa_path,
+            slice_num_4ch=context["slice_num_4ch"],
+            slice_num_sa=context["slice_num_sa"],
+            mask_lge_sa=context.get("mask_lge_sa_path"),
+        )
+        if result.get("error_code") != 0 or result.get("error"):
+            return result
+
+        metrics = result.get("metrics", {})
+        result["report_data"] = self._build_report_data(
+            metrics,
+            result.get("segmentation_4ch", {}),
+            result.get("segmentation_sa", {}),
+            cds_result=context.get("cds_result"),
+            nicms_result=context.get("nicms_result"),
+        )
+        result["cds_result"] = context.get("cds_result")
+        result["nicms_result"] = context.get("nicms_result")
+        return result
     
     # ============ Agent驱动的序列识别与智能抽帧 ============
     
@@ -334,6 +478,19 @@ class HeartMRIAgent:
                 if thoughts_match:
                     print(f"    完整响应解析失败，尝试thoughts部分...")
                     modality = self._parse_sequence_from_response(thoughts_match.group(1))
+
+            # Fallback 3: trust only an explicit upload filename such as 4CH.zip.
+            if modality == "unknown" and session_id:
+                original_name = get_session_manager().get_original_name(
+                    session_id, volume_path
+                )
+                filename_modality = self._get_filename_sequence(original_name)
+                if filename_modality != "unknown":
+                    print(
+                        f"    图像识别失败，使用明确文件名兜底: "
+                        f"{original_name} → {filename_modality}"
+                    )
+                    modality = filename_modality
             
             full_modality = SEQUENCE_TO_FULL_MODALITY.get(modality, modality)
             
@@ -630,7 +787,19 @@ class HeartMRIAgent:
         print(f"  序列信息: {', '.join(seq_desc_parts)}")
         print(f"  Prompt: {full_prompt[:200]}...")
         
-        first_response, action = self.agent_client.chat(full_prompt, combined_frames)
+        explicit_api = self._get_explicit_api_request(question)
+        if explicit_api:
+            # Do not let an unambiguous workflow command randomly degrade to VQA.
+            action = {"API_name": explicit_api, "API_params": {}}
+            first_response = (
+                '"thoughts🤔" "The request explicitly names a supported workflow, '
+                'so the corresponding expert pipeline should be used." '
+                f'"actions🚀" [{{"API_name": "{explicit_api}", "API_params": {{}}}}] '
+                '"value👉" "I will run the requested expert workflow."'
+            )
+            print(f"  明确任务意图，固定路由: {explicit_api}")
+        else:
+            first_response, action = self.agent_client.chat(full_prompt, combined_frames)
         
         step4_elapsed = time.time() - step4_start
         stage_timings['agent_api_decision'] = step4_elapsed
@@ -710,6 +879,7 @@ class HeartMRIAgent:
         report_data = None
         seg_result_info = {}
         download_urls = []  # 可下载文件列表
+        correction_workflow = None
         
         worker_name = API_NAME_TO_WORKER.get(api_name)
         
@@ -910,6 +1080,71 @@ class HeartMRIAgent:
                                 "url": f"/api/download/{session_id}/nifti/{os.path.basename(nifti_p)}",
                             })
         
+        elif api_name == "Cardiac Metrics Calculation":
+            # ---- 独立指标计算: 4CH + SA 自动分割后计算 ----
+            image_4ch = modality_to_path.get("cine_4ch") or modality_to_path.get("4ch")
+            image_sa = modality_to_path.get("cine_sa") or modality_to_path.get("sa")
+            if not image_4ch or not image_sa:
+                return {
+                    "error": f"指标计算需要4ch和sa模态。已识别: {[v['full_modality'] for v in valid_volumes]}",
+                    "api_name": api_name,
+                    "detected_sequences": [v["full_modality"] for v in valid_volumes],
+                    "session_id": session_id,
+                    "agent_response": first_response,
+                }
+
+            metric_kwargs = dict(kwargs)
+            if session_id:
+                seg_dir = os.path.join(CACHE_RESULTS_DIR, session_id, "segmentation")
+                os.makedirs(seg_dir, exist_ok=True)
+                _smgr = get_session_manager()
+                run_tag = str(int(time.time() * 1000))
+                name_4ch = _smgr.get_original_name(session_id, image_4ch) or "4ch.nii.gz"
+                name_sa = _smgr.get_original_name(session_id, image_sa) or "sa.nii.gz"
+                metric_kwargs["output_4ch"] = os.path.join(
+                    seg_dir, get_clean_seg_name(name_4ch, f"_seg_{run_tag}")
+                )
+                metric_kwargs["output_sa"] = os.path.join(
+                    seg_dir, get_clean_seg_name(name_sa, f"_seg_{run_tag}")
+                )
+
+            expert_result = self.expert_client.call_metrics(
+                worker_name, image_4ch, image_sa, **metric_kwargs
+            )
+            metrics = expert_result.get("metrics", {})
+            if metrics:
+                report_data = self._build_report_data(
+                    metrics,
+                    expert_result.get("segmentation_4ch", {}),
+                    expert_result.get("segmentation_sa", {}),
+                )
+
+            if session_id and metrics:
+                seg_4ch_info = expert_result.get("segmentation_4ch", {})
+                seg_sa_info = expert_result.get("segmentation_sa", {})
+                mask_4ch_path = seg_4ch_info.get("output_path")
+                mask_sa_path = seg_sa_info.get("output_path")
+                for label, path in [
+                    ("4CH Seg Label", mask_4ch_path),
+                    ("SA Seg Label", mask_sa_path),
+                ]:
+                    if path and os.path.isfile(path):
+                        download_urls.append({
+                            "type": "seg_label",
+                            "label": label,
+                            "filename": os.path.basename(path),
+                            "url": f"/api/download/{session_id}/segmentation/{os.path.basename(path)}",
+                        })
+                if mask_4ch_path and mask_sa_path:
+                    correction_workflow = self.register_metric_correction_workflow(
+                        session_id=session_id,
+                        mask_4ch_path=mask_4ch_path,
+                        mask_sa_path=mask_sa_path,
+                        slice_num_4ch=seg_4ch_info.get("slice_num") or 1,
+                        slice_num_sa=seg_sa_info.get("slice_num") or 1,
+                        image_sa_path=image_sa,
+                    )
+
         elif api_name == "Medical Report Generation":
             # ---- 医学报告生成: 需要 4ch + sa，可选 2ch / lge_sa ----
             image_4ch = modality_to_path.get("cine_4ch") or modality_to_path.get("4ch")
@@ -930,11 +1165,25 @@ class HeartMRIAgent:
                 print(f"  可选模态 2ch: {os.path.basename(image_2ch)}")
             if image_lge:
                 print(f"  可选模态 lge_sa: {os.path.basename(image_lge)}")
-            
+
+            # Preserve the phase count used by the first metric calculation so
+            # an unchanged corrected mask reproduces the baseline calculation.
+            report_kwargs = dict(kwargs)
+            report_slice_num_4ch = (
+                report_kwargs.get("slice_num_4ch")
+                or get_slice_num_from_path(image_4ch, 1)
+            )
+            report_slice_num_sa = (
+                report_kwargs.get("slice_num_sa")
+                or get_slice_num_from_path(image_sa, 1)
+            )
+            report_kwargs["slice_num_4ch"] = report_slice_num_4ch
+            report_kwargs["slice_num_sa"] = report_slice_num_sa
+
             expert_result = self.expert_client.call_mrg(
                 worker_name, image_4ch, image_sa,
                 image_2ch=image_2ch, image_lge_sa=image_lge,
-                **kwargs
+                **report_kwargs
             )
             
             metrics = expert_result.get("metrics", {})
@@ -991,9 +1240,12 @@ class HeartMRIAgent:
                 _smgr = get_session_manager()
                 seg_4ch_info = expert_result.get("segmentation_4ch", {})
                 seg_sa_info = expert_result.get("segmentation_sa", {})
-                for seg_label, seg_info, vol_path in [
-                    ("4CH Seg Label", seg_4ch_info, image_4ch), 
-                    ("SA Seg Label", seg_sa_info, image_sa),
+                seg_lge_info = expert_result.get("segmentation_lge_sa", {})
+                correction_masks = {}
+                for modality, seg_label, seg_info, vol_path in [
+                    ("4ch", "4CH Seg Label", seg_4ch_info, image_4ch),
+                    ("sa", "SA Seg Label", seg_sa_info, image_sa),
+                    ("lge_sa", "LGE SA Seg Label", seg_lge_info, image_lge),
                 ]:
                     seg_path = seg_info.get("output_path")
                     if seg_path and os.path.exists(seg_path):
@@ -1001,9 +1253,12 @@ class HeartMRIAgent:
                         os.makedirs(seg_dest_dir, exist_ok=True)
                         orig_name = _smgr.get_original_name(session_id, vol_path) if vol_path else ""
                         seg_dest_name = get_clean_seg_name(orig_name, "_seg") if orig_name else os.path.basename(seg_path)
+                        if os.path.exists(os.path.join(seg_dest_dir, seg_dest_name)):
+                            stem = seg_dest_name[:-7] if seg_dest_name.endswith(".nii.gz") else os.path.splitext(seg_dest_name)[0]
+                            seg_dest_name = f"{stem}_auto_{int(time.time() * 1000)}.nii.gz"
                         seg_dest = os.path.join(seg_dest_dir, seg_dest_name)
-                        if not os.path.exists(seg_dest):
-                            shutil.copy2(seg_path, seg_dest)
+                        shutil.copy2(seg_path, seg_dest)
+                        correction_masks[modality] = seg_dest
                         download_urls.append({
                             "type": "seg_label",
                             "label": seg_label,
@@ -1029,6 +1284,19 @@ class HeartMRIAgent:
                                 "filename": os.path.basename(nifti_p),
                                 "url": f"/api/download/{session_id}/nifti/{os.path.basename(nifti_p)}",
                             })
+
+                if metrics and {"4ch", "sa"}.issubset(correction_masks):
+                    correction_workflow = self.register_metric_correction_workflow(
+                        session_id=session_id,
+                        mask_4ch_path=correction_masks["4ch"],
+                        mask_sa_path=correction_masks["sa"],
+                        slice_num_4ch=report_slice_num_4ch,
+                        slice_num_sa=report_slice_num_sa,
+                        image_sa_path=image_sa,
+                        mask_lge_sa_path=correction_masks.get("lge_sa"),
+                        cds_result=cds_res,
+                        nicms_result=nicms_res,
+                    )
         
         elif api_name == "Medical Info Retrieval":
             # ---- MIR (Medical Info Retrieval) ----
@@ -1046,7 +1314,7 @@ class HeartMRIAgent:
             stage_timings['classification_cc'] = step5_elapsed
         elif api_name == "Non-ischemic Cardiomyopathy Subclassification":
             stage_timings['classification_ncc'] = step5_elapsed
-        elif api_name == "Medical Report Generation":
+        elif api_name in ("Medical Report Generation", "Cardiac Metrics Calculation"):
             stage_timings['report_generation'] = step5_elapsed
         elif api_name == "Medical Info Retrieval":
             stage_timings['mir'] = step5_elapsed
@@ -1108,6 +1376,8 @@ class HeartMRIAgent:
             result["report_data"] = report_data
         if seg_result_info:
             result["seg_result"] = seg_result_info
+        if correction_workflow:
+            result["correction_workflow"] = correction_workflow
         
         # MRG 编排结果中的 CDS / NICMS
         if api_name == "Medical Report Generation" and expert_result:
@@ -1298,4 +1568,3 @@ class HeartMRIAgent:
             "first_response": first_response,
             "session_id": session_id,
         }
-

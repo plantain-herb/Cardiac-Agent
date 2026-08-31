@@ -1,11 +1,14 @@
 // 配置
-const API_BASE_URL = 'http://localhost:8005';
+// Use the same hostname as the page so an SSH tunnel opened on 127.0.0.1
+// does not get redirected through a localhost proxy or IPv6 resolution.
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:8005`;
 
 // 状态
 let selectedFiles = [];
 let selectedTask = 'mr';
 let isProcessing = false;
 let currentSessionId = null;
+const handledLongitudinalOffers = new Set();
 
 // DOM元素
 const chatMessages = document.getElementById('chatMessages');
@@ -21,7 +24,7 @@ const statusText = document.getElementById('statusText');
 const taskDescription = document.getElementById('taskDescription');
 
 const taskDescriptions = {
-  mr: 'Cardiac MR mode: Upload cardiac MRI files (.zip/.nii.gz) → Agent identifies sequences → Smart frame extraction → Agent decides API → Expert model → Download results (seg labels, NIFTI, PDF reports).',
+  mr: 'Cardiac MR mode: Upload images → automatic segmentation and metrics → download masks → optionally correct and upload masks → recalculate without rerunning segmentation.',
   ct: 'Cardiac CT mode: Coming soon.',
   us: 'Cardiac Ultrasound mode: Coming soon.',
   ecg: 'ECG analysis mode: Coming soon.',
@@ -304,7 +307,16 @@ function addBotMessage(data) {
   const hasFirstResponse = data.first_response;
   const hasTwoTurns = hasApiName && hasFirstResponse;
   
-  if (hasTwoTurns) {
+  if (data.error) {
+    content += `
+      <div class="conversation-flow">
+        <div class="flow-step conclusion">
+          <div class="flow-step-header">⚠️ Request Error</div>
+          <div class="flow-step-content">${escapeHtml(data.response || 'Request failed')}</div>
+        </div>
+      </div>
+    `;
+  } else if (hasTwoTurns) {
     // ========== 两轮对话结构化可视化（有外部API调用） ==========
     content += '<div class="conversation-flow">';
     
@@ -619,6 +631,161 @@ function addBotMessage(data) {
     
     content += '</div></div>';
   }
+
+  // Show optional research finding heads on every completed single-exam report.
+  const wallMotionEvidence = data.finding_evidence && data.finding_evidence.wall_motion;
+  if (wallMotionEvidence) {
+    const probability = Number(wallMotionEvidence.probability);
+    const threshold = Number(wallMotionEvidence.threshold);
+    const auc = Number(wallMotionEvidence.validation_auroc);
+    const probabilityText = Number.isFinite(probability)
+      ? `${(probability * 100).toFixed(1)}%` : 'Unavailable';
+    const thresholdText = Number.isFinite(threshold)
+      ? `${(threshold * 100).toFixed(1)}%` : 'Unavailable';
+    const aucText = Number.isFinite(auc) ? auc.toFixed(3) : 'Unavailable';
+    const classification = wallMotionEvidence.positive === true
+      ? 'Positive research flag'
+      : (wallMotionEvidence.positive === false ? 'Negative research flag' : 'Unavailable');
+    content += `
+      <div class="medical-report">
+        <div class="report-header">
+          <span class="icon">🧠</span>
+          <h3>Research Finding-model Evidence</h3>
+        </div>
+        <div class="report-section">
+          <div class="report-section-toggle" onclick="toggleReportSection(this)">
+            <span class="toggle-arrow">▼</span>
+            <span>Wall-motion Abnormality</span>
+          </div>
+          <div class="report-section-body"><div class="report-metrics">
+            <div class="metric-item">
+              <div class="metric-name">Abnormality probability</div>
+              <div class="metric-value-row"><span class="metric-value">${probabilityText}</span></div>
+              <div class="metric-range">${escapeHtml(classification)} · threshold ${thresholdText}</div>
+              <div class="metric-range">Validation AUROC ${aucText} · ${escapeHtml(wallMotionEvidence.model_version || 'Model version unavailable')}</div>
+              <div class="metric-range">Research evidence only; probability is not a calibrated burden score.</div>
+            </div>
+          </div></div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Longitudinal dashboard: reuse the existing report and metric-card styling.
+  if (data.longitudinal_comparison) {
+    const comparison = data.longitudinal_comparison;
+    const baselineDate = comparison.baseline && comparison.baseline.exam_date
+      ? comparison.baseline.exam_date : 'Date unavailable';
+    const followupDate = comparison.followup && comparison.followup.exam_date
+      ? comparison.followup.exam_date : 'Date unavailable';
+    const interval = comparison.interval_days === null || comparison.interval_days === undefined
+      ? 'Interval unavailable' : `${comparison.interval_days} days`;
+    const comparability = comparison.comparability || {};
+    const comparabilityText = comparability.comparable
+      ? 'Comparable evidence available'
+      : `Review comparability: ${(comparability.reasons || []).join(', ') || 'unknown'}`;
+    content += `
+      <div class="medical-report">
+        <div class="report-header">
+          <span class="icon">📈</span>
+          <h3>Longitudinal Follow-up Dashboard</h3>
+        </div>
+        <div class="report-section">
+          <div class="report-section-body">
+            <div class="result-box">
+              <div class="result-label">Baseline → Follow-up</div>
+              <div class="result-value">${escapeHtml(baselineDate)} → ${escapeHtml(followupDate)}</div>
+              <div class="metric-range">${escapeHtml(interval)} · ${escapeHtml(comparabilityText)}</div>
+            </div>
+          </div>
+        </div>
+    `;
+    const comparisonGroups = {};
+    (comparison.rows || []).forEach(row => {
+      const category = row.category || 'Additional Measurements';
+      if (!comparisonGroups[category]) comparisonGroups[category] = [];
+      comparisonGroups[category].push(row);
+    });
+    Object.entries(comparisonGroups).forEach(([category, rows]) => {
+      content += `
+        <div class="report-section">
+          <div class="report-section-toggle" onclick="toggleReportSection(this)">
+            <span class="toggle-arrow">▼</span>
+            <span>📊</span>
+            <span>${escapeHtml(category)} (${rows.length})</span>
+          </div>
+          <div class="report-section-body"><div class="report-metrics">
+      `;
+      rows.forEach(row => {
+        const baseline = row.baseline === null || row.baseline === undefined
+          ? '—' : formatMetricValue(row.baseline);
+        const followup = row.followup === null || row.followup === undefined
+          ? '—' : formatMetricValue(row.followup);
+        const delta = row.absolute_delta === null || row.absolute_delta === undefined
+          ? '—'
+          : `${row.absolute_delta > 0 ? '+' : ''}${formatMetricValue(row.absolute_delta)}`;
+        const relative = row.relative_delta === null || row.relative_delta === undefined
+          ? '' : ` (${row.relative_delta > 0 ? '+' : ''}${(row.relative_delta * 100).toFixed(1)}%)`;
+        const flag = row.research_flag === 'change_flag'
+          ? 'Research change flag'
+          : (row.research_flag === 'unknown'
+              ? 'Unknown'
+              : (row.research_flag === 'descriptive_delta'
+                  ? 'Descriptive delta'
+                  : 'Within placeholder threshold'));
+        content += `
+          <div class="metric-item">
+            <div class="metric-name">${escapeHtml(row.display_name || row.metric)}</div>
+            <div class="metric-value-row">
+              <span class="metric-value">${baseline} → ${followup}</span>
+              <span class="metric-unit">${escapeHtml(row.unit || '')}</span>
+            </div>
+            <div class="metric-range">Δ ${delta}${relative} · ${escapeHtml(flag)}</div>
+          </div>
+        `;
+      });
+      content += '</div></div></div>';
+    });
+    if (comparison.finding_rows && comparison.finding_rows.length > 0) {
+      content += `
+        <div class="report-section">
+          <div class="report-section-toggle" onclick="toggleReportSection(this)">
+            <span class="toggle-arrow">▼</span>
+            <span>🧠</span>
+            <span>Finding-model Evidence (${comparison.finding_rows.length})</span>
+          </div>
+          <div class="report-section-body"><div class="report-metrics">
+      `;
+      comparison.finding_rows.forEach(row => {
+        const baseline = row.baseline_probability === null || row.baseline_probability === undefined
+          ? '—' : `${(row.baseline_probability * 100).toFixed(1)}%`;
+        const followup = row.followup_probability === null || row.followup_probability === undefined
+          ? '—' : `${(row.followup_probability * 100).toFixed(1)}%`;
+        const delta = row.probability_delta === null || row.probability_delta === undefined
+          ? '—' : `${row.probability_delta > 0 ? '+' : ''}${(row.probability_delta * 100).toFixed(1)} pp`;
+        const auc = row.validation_auroc === null || row.validation_auroc === undefined
+          ? 'unavailable' : Number(row.validation_auroc).toFixed(3);
+        content += `
+          <div class="metric-item">
+            <div class="metric-name">${escapeHtml(row.display_name || row.finding)}</div>
+            <div class="metric-value-row">
+              <span class="metric-value">${baseline} → ${followup}</span>
+            </div>
+            <div class="metric-range">Δ ${delta} · ${escapeHtml(row.binary_transition || 'unknown')}</div>
+            <div class="metric-range">Research model validation AUROC ${auc}; probability is not a calibrated burden score.</div>
+          </div>
+        `;
+      });
+      content += '</div></div></div>';
+    }
+    content += `
+        <div class="report-section"><div class="report-section-body">
+            <div class="metric-range">${escapeHtml(comparison.summary || '')}</div>
+            <div class="metric-range">${escapeHtml(comparison.disclaimer || '')}</div>
+        </div></div>
+      </div>
+    `;
+  }
   
   // ========== 下载按钮区域 ==========
   if (data.download_urls && data.download_urls.length > 0) {
@@ -648,6 +815,49 @@ function addBotMessage(data) {
     });
     content += '</div></div>';
   }
+
+  // ========== 人工修正分割后二次计算 ==========
+  if (data.correction_workflow && data.correction_workflow.enabled) {
+    const correctionId = `correction-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const sessionId = data.session_id || currentSessionId || '';
+    const endpoint = data.correction_workflow.endpoint || '/api/metrics/recalculate';
+    content += `
+      <div class="correction-section" id="${correctionId}" data-session-id="${escapeHtml(sessionId)}" data-endpoint="${escapeHtml(endpoint)}">
+        <div class="correction-title">✏️ Review Segmentation &amp; Recalculate</div>
+        <div class="correction-description">
+          Download the automatic masks above, correct them without changing NIfTI shape,
+          spacing, orientation, or origin, then upload either or both corrected masks.
+          A modality left empty will reuse its current mask.
+        </div>
+        <div class="correction-downloads">
+    `;
+    (data.correction_workflow.masks || []).forEach(mask => {
+      const downloadUrl = API_BASE_URL + mask.download_url;
+      content += `
+        <a href="${downloadUrl}" download="${escapeHtml(mask.filename)}" target="_blank">
+          Download ${escapeHtml(mask.label)} · labels ${escapeHtml(mask.allowed_labels)}
+        </a>
+      `;
+    });
+    content += `
+        </div>
+        <div class="correction-inputs">
+          <label class="correction-file">
+            <span>Corrected 4CH mask <small>(optional)</small></span>
+            <input type="file" data-modality="4ch" accept=".nii,.nii.gz">
+          </label>
+          <label class="correction-file">
+            <span>Corrected SA mask <small>(optional)</small></span>
+            <input type="file" data-modality="sa" accept=".nii,.nii.gz">
+          </label>
+        </div>
+        <button class="correction-submit" onclick="recalculateMetrics('${correctionId}')">
+          Upload &amp; Recalculate Metrics
+        </button>
+        <div class="correction-status" aria-live="polite"></div>
+      </div>
+    `;
+  }
   
   // 错误状态
   if (data.error) {
@@ -660,6 +870,122 @@ function addBotMessage(data) {
   messageDiv.innerHTML = content;
   chatMessages.appendChild(messageDiv);
   scrollToBottom();
+
+  if (data.longitudinal_offer && data.longitudinal_offer.enabled) {
+    const offer = data.longitudinal_offer;
+    const offerId = offer.offer_id || `${offer.prior_exam_id}:${offer.current_exam_id}`;
+    if (!handledLongitudinalOffers.has(offerId)) {
+      handledLongitudinalOffers.add(offerId);
+      window.setTimeout(() => {
+        if (window.confirm(offer.message ||
+          'A previous examination for the same patient was found. Would you like to perform a longitudinal follow-up comparison?')) {
+          runLongitudinalComparison(offer);
+        }
+      }, 0);
+    }
+  }
+}
+
+async function runLongitudinalComparison(offer) {
+  if (isProcessing) return;
+  addUserMessage('Run longitudinal follow-up comparison', []);
+  isProcessing = true;
+  updateSendButton();
+  processingBar.classList.add('active');
+  const typingId = addTypingIndicator();
+  try {
+    const formData = new FormData();
+    formData.append('session_id', currentSessionId || '');
+    formData.append('prior_exam_id', offer.prior_exam_id);
+    formData.append('current_exam_id', offer.current_exam_id);
+    const response = await fetch(`${API_BASE_URL}${offer.endpoint || '/api/longitudinal/compare'}`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || `Request failed: ${response.status}`);
+    }
+    removeTypingIndicator(typingId);
+    addBotMessage(data);
+  } catch (error) {
+    removeTypingIndicator(typingId);
+    addBotMessage({
+      response: `Follow-up comparison failed: ${error.message}`,
+      error: true,
+    });
+  } finally {
+    isProcessing = false;
+    updateSendButton();
+    processingBar.classList.remove('active');
+  }
+}
+
+async function recalculateMetrics(workflowId) {
+  const section = document.getElementById(workflowId);
+  if (!section || isProcessing) return;
+
+  const input4ch = section.querySelector('input[data-modality="4ch"]');
+  const inputSa = section.querySelector('input[data-modality="sa"]');
+  const file4ch = input4ch && input4ch.files.length ? input4ch.files[0] : null;
+  const fileSa = inputSa && inputSa.files.length ? inputSa.files[0] : null;
+  const status = section.querySelector('.correction-status');
+  const button = section.querySelector('.correction-submit');
+
+  if (!file4ch && !fileSa) {
+    status.textContent = 'Please select at least one corrected 4CH or SA mask.';
+    status.className = 'correction-status error';
+    return;
+  }
+
+  const uploadedFiles = [file4ch, fileSa].filter(Boolean);
+  const invalidFile = uploadedFiles.find(file => {
+    const name = file.name.toLowerCase();
+    return !name.endsWith('.nii') && !name.endsWith('.nii.gz');
+  });
+  if (invalidFile) {
+    status.textContent = `${invalidFile.name} is not a .nii or .nii.gz file.`;
+    status.className = 'correction-status error';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('session_id', section.dataset.sessionId);
+  if (file4ch) formData.append('corrected_4ch', file4ch, file4ch.name);
+  if (fileSa) formData.append('corrected_sa', fileSa, fileSa.name);
+
+  addUserMessage('Upload corrected segmentation and recalculate metrics', uploadedFiles);
+  isProcessing = true;
+  updateSendButton();
+  processingBar.classList.add('active');
+  button.disabled = true;
+  status.textContent = 'Validating masks and recalculating metrics...';
+  status.className = 'correction-status';
+  const typingId = addTypingIndicator();
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${section.dataset.endpoint}`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || `Request failed: ${response.status}`);
+    }
+    removeTypingIndicator(typingId);
+    status.textContent = 'Recalculation complete.';
+    status.className = 'correction-status success';
+    addBotMessage(data);
+  } catch (error) {
+    removeTypingIndicator(typingId);
+    status.textContent = error.message;
+    status.className = 'correction-status error';
+    button.disabled = false;
+  } finally {
+    isProcessing = false;
+    updateSendButton();
+    processingBar.classList.remove('active');
+  }
 }
 
 function addTypingIndicator() {

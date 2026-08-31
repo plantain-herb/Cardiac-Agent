@@ -1178,6 +1178,105 @@ header {
 .download-btn.type-seg_label { border-left: 3px solid #f472b6; }
 .download-btn.type-report_pdf { border-left: 3px solid #60a5fa; }
 
+/* ============ 人工修正分割后二次计算 ============ */
+.correction-section {
+  margin-top: 14px;
+  padding: 14px;
+  background: rgba(244, 114, 182, 0.06);
+  border: 1px solid rgba(244, 114, 182, 0.35);
+  border-left: 3px solid #f472b6;
+  border-radius: 10px;
+}
+
+.correction-title {
+  color: #f9a8d4;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.correction-description {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.correction-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.correction-downloads a {
+  color: var(--primary);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.correction-downloads a:hover {
+  text-decoration: underline;
+}
+
+.correction-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.correction-file {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.correction-file small {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.correction-file input {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.correction-submit {
+  padding: 9px 14px;
+  border: 1px solid #f472b6;
+  border-radius: 8px;
+  background: rgba(244, 114, 182, 0.12);
+  color: #f9a8d4;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.correction-submit:hover:not(:disabled) {
+  background: rgba(244, 114, 182, 0.22);
+}
+
+.correction-submit:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.correction-status {
+  min-height: 18px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.correction-status.success { color: var(--success); }
+.correction-status.error { color: var(--error); }
+
 /* ============ 对话阶段可视化 ============ */
 .conversation-flow {
   margin-top: 12px;

@@ -11,6 +11,7 @@
 import argparse
 import asyncio
 import json
+import math
 import os
 import sys
 import tempfile
@@ -20,6 +21,7 @@ import traceback
 import uuid
 from typing import Dict, Optional
 
+import numpy as np
 import requests
 import uvicorn
 from fastapi import FastAPI, Request
@@ -34,6 +36,8 @@ MODEL_SRC_DIR = os.path.join(SRC_DIR, "CMR")
 # Add paths for imports
 sys.path.insert(0, PROJECT_ROOT)
 sys.path.insert(0, MODEL_SRC_DIR)
+
+from app.utils.dicom import get_slice_num_from_path
 
 # 导入计算函数
 from calculate_cardiac_metrics_cine_4ch import calculate_cine_4ch_metrics
@@ -76,6 +80,21 @@ logger = build_logger("metrics_worker", os.path.join("workers", "metrics.log"))
 
 global_counter = 0
 model_semaphore = None
+
+
+def _json_safe(value):
+    """Convert metric results to strict JSON-compatible Python values."""
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return _json_safe(value.tolist())
+    if isinstance(value, np.generic):
+        return _json_safe(value.item())
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
 
 
 def heart_beat_worker(controller):
@@ -413,10 +432,12 @@ class MetricsWorker:
                 "segmentation_4ch": {
                     "output_path": output_4ch,
                     "unique_labels": seg_result_4ch.get("unique_labels"),
+                    "slice_num": slice_num_4ch,
                 },
                 "segmentation_sa": {
                     "output_path": output_sa,
                     "unique_labels": seg_result_sa.get("unique_labels"),
+                    "slice_num": slice_num_sa,
                 },
                 "metrics": metrics_result["metrics"],
                 "metrics_4ch_raw": metrics_result.get("metrics_4ch", {}),
@@ -439,6 +460,60 @@ class MetricsWorker:
                 "traceback": traceback.format_exc(),
             }
 
+    def process_corrected_masks(
+        self,
+        mask_4ch: str,
+        mask_sa: str,
+        mask_lge_sa: str = None,
+        slice_num_4ch: int = None,
+        slice_num_sa: int = None,
+    ) -> Dict:
+        """跳过分割模型，直接使用人工修正 mask 重新计算指标。"""
+        missing = [path for path in (mask_4ch, mask_sa) if not path or not os.path.isfile(path)]
+        if missing:
+            return {
+                "error_code": ErrorCode.INTERNAL_ERROR,
+                "error": "Corrected metric calculation requires readable 4CH and SA masks.",
+            }
+
+        # Older report workers did not return their phase count, so existing
+        # correction contexts may contain the fallback value 1. Infer it from
+        # the unchanged NIfTI geometry before calculating corrected metrics.
+        if not slice_num_4ch or slice_num_4ch <= 1:
+            slice_num_4ch = get_slice_num_from_path(mask_4ch, 1)
+        if not slice_num_sa or slice_num_sa <= 1:
+            slice_num_sa = get_slice_num_from_path(mask_sa, 1)
+
+        logger.info("[Metrics] 使用人工修正 mask，跳过自动分割")
+        logger.info(
+            f"  phase count: 4CH={slice_num_4ch}, SA={slice_num_sa}"
+        )
+        metrics_result = self.calculate_metrics(
+            mask_4ch,
+            mask_sa,
+            mask_lge_sa=mask_lge_sa,
+            slice_num_4ch=slice_num_4ch,
+            slice_num_sa=slice_num_sa,
+        )
+        if metrics_result.get("error_code") != 0:
+            return metrics_result
+
+        return {
+            "error_code": 0,
+            "calculation_source": "corrected_segmentation",
+            "segmentation_4ch": {
+                "output_path": mask_4ch,
+                "slice_num": slice_num_4ch,
+            },
+            "segmentation_sa": {
+                "output_path": mask_sa,
+                "slice_num": slice_num_sa,
+            },
+            "metrics": metrics_result["metrics"],
+            "metrics_4ch_raw": metrics_result.get("metrics_4ch", {}),
+            "metrics_sa_raw": metrics_result.get("metrics_sa", {}),
+        }
+
 
 # ============ FastAPI 服务 ============
 app = FastAPI()
@@ -457,6 +532,25 @@ async def generate(request: Request):
     output_sa = params.get("output_sa")
     slice_num_4ch = params.get("slice_num_4ch")
     slice_num_sa = params.get("slice_num_sa")
+    mask_4ch = params.get("mask_4ch")
+    mask_sa = params.get("mask_sa")
+    mask_lge_sa = params.get("mask_lge_sa")
+
+    if mask_4ch or mask_sa:
+        if not mask_4ch or not mask_sa:
+            return JSONResponse({
+                "error_code": ErrorCode.INTERNAL_ERROR,
+                "error": "mask_4ch and mask_sa must be provided together",
+            })
+        result = worker.process_corrected_masks(
+            mask_4ch,
+            mask_sa,
+            mask_lge_sa=mask_lge_sa,
+            slice_num_4ch=slice_num_4ch,
+            slice_num_sa=slice_num_sa,
+        )
+        logger.info(f"修正 mask 重算完成, error_code={result.get('error_code')}")
+        return JSONResponse(_json_safe(result))
     
     logger.info(f"收到心脏指标计算请求: 4CH={image_4ch}, SA={image_sa}, LGE_SA={image_lge_sa or 'N/A'}")
     
@@ -476,7 +570,7 @@ async def generate(request: Request):
     )
     
     logger.info(f"请求处理完成, error_code={result.get('error_code')}")
-    return JSONResponse(result)
+    return JSONResponse(_json_safe(result))
 
 
 @app.post("/worker_get_status")

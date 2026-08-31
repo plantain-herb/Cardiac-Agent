@@ -95,10 +95,57 @@ class ExpertWorkerClient:
             "slice_num_4ch": kwargs.get("slice_num_4ch") or get_slice_num_from_path(image_4ch, 1),
             "slice_num_sa": kwargs.get("slice_num_sa") or get_slice_num_from_path(image_sa, 1),
         }
+        if kwargs.get("output_4ch"):
+            params["output_4ch"] = kwargs["output_4ch"]
+        if kwargs.get("output_sa"):
+            params["output_sa"] = kwargs["output_sa"]
 
         try:
             resp = self.session.post(f"{worker_url}/worker_generate", json=params, timeout=600)
             return resp.json()
+        except Exception as e:
+            return {"error": str(e)}
+
+    def recalculate_metrics(
+        self,
+        mask_4ch: str,
+        mask_sa: str,
+        slice_num_4ch: int,
+        slice_num_sa: int,
+        mask_lge_sa: str = None,
+    ) -> Dict:
+        """使用人工修正后的 mask 重算指标，不再次调用分割模型。"""
+        worker_url = self.workers.get("MetricsWorker")
+        if not worker_url:
+            return {"error": "未找到Worker: MetricsWorker"}
+
+        params = {
+            "mask_4ch": mask_4ch,
+            "mask_sa": mask_sa,
+            "slice_num_4ch": slice_num_4ch,
+            "slice_num_sa": slice_num_sa,
+        }
+        if mask_lge_sa:
+            params["mask_lge_sa"] = mask_lge_sa
+
+        try:
+            resp = self.session.post(
+                f"{worker_url}/worker_generate", json=params, timeout=600
+            )
+            try:
+                result = resp.json()
+            except ValueError:
+                body = (resp.text or "<empty response>").strip()[:500]
+                return {
+                    "error_code": resp.status_code,
+                    "error": (
+                        f"Metrics worker returned HTTP {resp.status_code} "
+                        f"with a non-JSON response: {body}"
+                    ),
+                }
+            if not resp.ok and not result.get("error"):
+                result["error"] = f"Metrics worker returned HTTP {resp.status_code}."
+            return result
         except Exception as e:
             return {"error": str(e)}
 

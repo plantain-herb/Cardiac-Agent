@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cardiac Agent</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=30">
+  <link rel="stylesheet" href="style.css?v=31">
 </head>
 
 <body>
@@ -66,7 +66,7 @@
         <div class="sidebar-section">
           <h3>Task Description</h3>
           <p id="taskDescription" style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
-            Cardiac MR mode: Upload cardiac MRI files (.zip/.nii.gz) → Agent identifies sequences → Smart frame extraction → Agent decides API → Expert model → Download results (seg labels, NIFTI, PDF reports).
+            Cardiac MR mode: Upload images → automatic segmentation and metrics → download masks → optionally correct and upload masks → recalculate without rerunning segmentation.
           </p>
         </div>
 
@@ -127,6 +127,7 @@
               <br>• DCM folder → .zip &nbsp;|&nbsp; Medical images → .nii.gz &nbsp;|&nbsp; Images → .png, .jpg
               <br><br>
               📥 <strong>Downloads</strong>: Segmentation labels (.nii.gz), original volumes (.nii.gz), PDF reports
+              <br>✏️ <strong>Correction loop</strong>: Download 4CH/SA masks, edit either or both, upload, and recalculate metrics
               <br><br>
               Just upload files and describe what you need!
             </div>
@@ -156,7 +157,7 @@
     </main>
   </div>
 
-  <script src="app.js?v=30"></script>
+  <script src="app.js?v=32"></script>
 </body>
 
 </html>

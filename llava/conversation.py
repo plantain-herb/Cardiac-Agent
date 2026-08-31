@@ -3,7 +3,6 @@ from enum import auto, Enum
 import os
 import re
 from typing import List, Tuple
-import torchvision.transforms.functional as F
 from PIL import Image
 
 
@@ -240,6 +239,10 @@ class Conversation:
                             new_w = 800
                             new_h = int(h * 800 / w)
                         # import ipdb; ipdb.set_trace()
+                        # Keep torchvision optional for API-only deployments;
+                        # this rendering path is the only place that needs it.
+                        import torchvision.transforms.functional as F
+
                         img = F.resize(img, (new_h, new_w))
 
                     if return_pil:

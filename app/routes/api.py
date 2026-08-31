@@ -5,7 +5,7 @@ import os
 import shutil
 import uuid
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,9 +21,17 @@ from app.config import (
     VERSION,
 )
 from app.services.heart_agent import HeartMRIAgent
+from app.services.exam_identity import extract_exam_identity
+from app.services.longitudinal import compare_exams, normalize_metrics, normalize_sequences
+from app.services.wall_motion import score_wall_motion
+from app.services.segmentation_correction import (
+    SegmentationCorrectionError,
+    validate_corrected_segmentation,
+)
 from app.services.session_manager import get_session_manager
 from app.utils.conversation import save_conversation_json
 from app.utils.dicom import extract_zip_file
+from app.utils.report import generate_cardiac_report_pdf
 
 
 def create_api_app():
@@ -192,6 +200,7 @@ def create_api_app():
             base_url = os.getenv("API_BASE_URL")
 
             # 调用Agent处理（传入session_id用于缓存抽帧结果）
+            exam_identity = extract_exam_identity(volume_paths)
             result = agent.process_request(
                 question=message,
                 volume_paths=volume_paths if volume_paths else None,
@@ -259,8 +268,32 @@ def create_api_app():
                 "metrics": metrics,
                 "report_data": report_data,
                 "download_urls": download_urls,
+                "correction_workflow": result.get("correction_workflow"),
                 "first_response": first_response,
             }
+
+            if metrics and exam_identity:
+                finding_evidence = {}
+                correction_context = session_mgr.get_metric_correction_context(session_id)
+                if correction_context:
+                    wall_motion = score_wall_motion(
+                        correction_context.get("image_sa_path"),
+                        correction_context.get("mask_sa_path"),
+                    )
+                    if wall_motion:
+                        finding_evidence["wall_motion"] = wall_motion
+                        response_dict["finding_evidence"] = finding_evidence
+                longitudinal_offer = session_mgr.register_exam(
+                    session_id=session_id,
+                    identity=exam_identity,
+                    metrics=normalize_metrics(metrics),
+                    detected_sequences=normalize_sequences(
+                        result.get("detected_sequences")
+                    ),
+                    findings=finding_evidence,
+                )
+                if longitudinal_offer:
+                    response_dict["longitudinal_offer"] = longitudinal_offer
 
             # 保存对话记录为JSON
             uploaded_filenames = [f.filename for f in files if f.filename]
@@ -297,6 +330,225 @@ def create_api_app():
                 round_label="error",
             )
             return JSONResponse(error_response)
+
+    # ============ 同一患者不同检查的纵向随访比较 ============
+    @app.post("/api/longitudinal/compare")
+    async def longitudinal_compare(
+        session_id: str = Form(...),
+        prior_exam_id: str = Form(...),
+        current_exam_id: str = Form(...),
+    ):
+        pair = session_mgr.get_exam_pair(
+            session_id, prior_exam_id, current_exam_id
+        )
+        if not pair:
+            return JSONResponse(
+                {"error": "The requested follow-up examination pair is unavailable."},
+                status_code=404,
+            )
+        comparison = compare_exams(*pair)
+        response_dict = {
+            "response": "Longitudinal follow-up comparison completed.",
+            "api_name": "Longitudinal Follow-up Comparison",
+            "session_id": session_id,
+            "longitudinal_comparison": comparison,
+        }
+        conv_path = save_conversation_json(
+            session_id=session_id,
+            user_message="Run longitudinal follow-up comparison",
+            uploaded_files=[],
+            task_type="mr",
+            response_data=response_dict,
+            round_label="longitudinal_followup",
+        )
+        if conv_path:
+            response_dict["conversation_json"] = (
+                f"/api/conversation/{session_id}/{os.path.basename(conv_path)}"
+            )
+        return JSONResponse(response_dict)
+
+    # ============ 人工修正分割后二次计算 ============
+    @app.post("/api/metrics/recalculate")
+    async def recalculate_metrics(
+        session_id: str = Form(...),
+        corrected_4ch: Optional[UploadFile] = File(None),
+        corrected_sa: Optional[UploadFile] = File(None),
+    ):
+        """上传一个或两个修正 mask；未上传的模态沿用本轮自动 mask。"""
+        session = session_mgr.get_session(session_id)
+        context = session_mgr.get_metric_correction_context(session_id)
+        if not session or not context:
+            return JSONResponse(
+                {"error": "No active segmentation correction workflow for this session."},
+                status_code=404,
+            )
+        if corrected_4ch is None and corrected_sa is None:
+            return JSONResponse(
+                {"error": "Upload at least one corrected 4CH or SA NIfTI mask."},
+                status_code=400,
+            )
+
+        for key in ("mask_4ch_path", "mask_sa_path"):
+            if not os.path.isfile(context.get(key, "")):
+                return JSONResponse(
+                    {"error": "The automatic segmentation baseline is no longer available."},
+                    status_code=410,
+                )
+
+        corrections_dir = os.path.join(CACHE_RESULTS_DIR, session_id, "segmentation")
+        os.makedirs(corrections_dir, exist_ok=True)
+        correction_id = uuid.uuid4().hex[:10]
+        created_paths = []
+        validation = {}
+
+        async def save_and_validate(upload: UploadFile, modality: str, baseline_path: str) -> str:
+            original_name = upload.filename or ""
+            lower_name = original_name.lower()
+            if not (lower_name.endswith(".nii") or lower_name.endswith(".nii.gz")):
+                raise SegmentationCorrectionError(
+                    f"Corrected {modality.upper()} mask must be a .nii or .nii.gz file."
+                )
+            suffix = ".nii.gz" if lower_name.endswith(".nii.gz") else ".nii"
+            output_path = os.path.join(
+                corrections_dir, f"corrected_{modality}_{correction_id}{suffix}"
+            )
+            with open(output_path, "wb") as target:
+                shutil.copyfileobj(upload.file, target)
+            created_paths.append(output_path)
+            if os.path.getsize(output_path) == 0:
+                raise SegmentationCorrectionError(
+                    f"Corrected {modality.upper()} mask is empty."
+                )
+            validation[modality] = validate_corrected_segmentation(
+                output_path, baseline_path, modality
+            )
+            return output_path
+
+        try:
+            mask_4ch_path = context["mask_4ch_path"]
+            mask_sa_path = context["mask_sa_path"]
+            if corrected_4ch is not None:
+                mask_4ch_path = await save_and_validate(
+                    corrected_4ch, "4ch", context["mask_4ch_path"]
+                )
+            if corrected_sa is not None:
+                mask_sa_path = await save_and_validate(
+                    corrected_sa, "sa", context["mask_sa_path"]
+                )
+        except SegmentationCorrectionError as exc:
+            for path in created_paths:
+                if os.path.isfile(path):
+                    os.remove(path)
+            return JSONResponse({"error": str(exc)}, status_code=422)
+        except Exception as exc:
+            for path in created_paths:
+                if os.path.isfile(path):
+                    os.remove(path)
+            return JSONResponse(
+                {"error": f"Failed to store corrected segmentation: {exc}"},
+                status_code=500,
+            )
+
+        result = agent.recalculate_from_corrected_masks(
+            context=context,
+            mask_4ch_path=mask_4ch_path,
+            mask_sa_path=mask_sa_path,
+        )
+        if result.get("error_code") != 0 or result.get("error"):
+            return JSONResponse(
+                {
+                    "error": result.get("error", "Corrected metric calculation failed."),
+                    "session_id": session_id,
+                },
+                status_code=502,
+            )
+
+        new_context = dict(context)
+        new_context["mask_4ch_path"] = mask_4ch_path
+        new_context["mask_sa_path"] = mask_sa_path
+        session_mgr.set_metric_correction_context(session_id, new_context)
+
+        download_urls = []
+        for modality, label, path in [
+            ("4ch", "Active 4CH Seg Label", mask_4ch_path),
+            ("sa", "Active SA Seg Label", mask_sa_path),
+        ]:
+            download_urls.append({
+                "type": "seg_label",
+                "label": label,
+                "filename": os.path.basename(path),
+                "url": f"/api/download/{session_id}/segmentation/{os.path.basename(path)}",
+            })
+        active_lge_path = new_context.get("mask_lge_sa_path")
+        if active_lge_path and os.path.isfile(active_lge_path):
+            download_urls.append({
+                "type": "seg_label",
+                "label": "Retained LGE SA Seg Label",
+                "filename": os.path.basename(active_lge_path),
+                "url": f"/api/download/{session_id}/segmentation/{os.path.basename(active_lge_path)}",
+            })
+
+        metrics = result.get("metrics", {})
+        report_data = result.get("report_data")
+        if metrics:
+            reports_dir = os.path.join(CACHE_RESULTS_DIR, session_id, "reports")
+            os.makedirs(reports_dir, exist_ok=True)
+            report_path = os.path.join(
+                reports_dir, f"cardiac_report_corrected_{correction_id}.pdf"
+            )
+            try:
+                generated_report = generate_cardiac_report_pdf(
+                    metrics=metrics,
+                    report_data=report_data,
+                    output_path=report_path,
+                )
+                if generated_report and os.path.isfile(generated_report):
+                    report_filename = os.path.basename(generated_report)
+                    download_urls.append({
+                        "type": "report_pdf",
+                        "label": "Corrected Cardiac Report",
+                        "filename": report_filename,
+                        "url": f"/api/download/{session_id}/reports/{report_filename}",
+                    })
+            except Exception as exc:
+                print(f"Corrected report generation failed: {exc}")
+
+        response_dict = {
+            "response": (
+                "Corrected segmentation accepted. Cardiac metrics were recalculated "
+                "without rerunning automatic segmentation. Existing CDS/NICMS results, "
+                "if shown, were retained and not rerun."
+            ),
+            "api_name": "Corrected Segmentation Recalculation",
+            "session_id": session_id,
+            "metrics": metrics,
+            "report_data": report_data,
+            "cds_result": result.get("cds_result"),
+            "nicms_result": result.get("nicms_result"),
+            "download_urls": download_urls,
+            "correction_validation": validation,
+            "correction_workflow": agent.build_metric_correction_workflow(
+                session_id, new_context
+            ),
+        }
+        uploaded_names = [
+            upload.filename
+            for upload in (corrected_4ch, corrected_sa)
+            if upload is not None and upload.filename
+        ]
+        conv_path = save_conversation_json(
+            session_id=session_id,
+            user_message="Upload corrected segmentation and recalculate metrics",
+            uploaded_files=uploaded_names,
+            task_type="mr",
+            response_data=response_dict,
+            round_label="corrected_segmentation_recalculation",
+        )
+        if conv_path:
+            response_dict["conversation_json"] = (
+                f"/api/conversation/{session_id}/{os.path.basename(conv_path)}"
+            )
+        return JSONResponse(response_dict)
 
     # ============ 文件下载接口 ============
     @app.get("/api/download/{session_id}/{file_type}/{filename}")

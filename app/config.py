@@ -12,22 +12,30 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ============ 服务地址 ============
-CONTROLLER_URL = "http://localhost:30000"
-AGENT_URL = "http://localhost:40000"
+# A portal may run separately from the GPU workers.  CARDIAC_SERVICE_HOST
+# keeps the single-host defaults while allowing an SSH-only frontend/backend
+# to reuse workers on another trusted host.
+SERVICE_HOST = os.getenv("CARDIAC_SERVICE_HOST", "localhost")
+CONTROLLER_URL = os.getenv(
+    "CARDIAC_CONTROLLER_URL", f"http://{SERVICE_HOST}:30000"
+)
+AGENT_URL = os.getenv("CARDIAC_AGENT_URL", f"http://{SERVICE_HOST}:40000")
 DEMO_DATA_DIR = "./demo_data"
 
 # Expert Worker 地址配置
 EXPERT_WORKERS = {
-    "Cine2CHSegWorker": "http://localhost:21010",
-    "Cine4CHSegWorker": "http://localhost:21011",
-    "CineSAXSegWorker": "http://localhost:21012",
-    "LgeSAXSegWorker": "http://localhost:21013",
-    "CDSWorker": "http://localhost:21020",
-    "NICMSWorker": "http://localhost:21021",
-    "MRGWorker": "http://localhost:21030",
-    "MetricsWorker": "http://localhost:21031",
-    "MIRWorker": "http://localhost:21040",
-    "SeqWorker": "http://localhost:21050",
+    "Cine2CHSegWorker": f"http://{SERVICE_HOST}:21010",
+    "Cine4CHSegWorker": f"http://{SERVICE_HOST}:21011",
+    "CineSAXSegWorker": f"http://{SERVICE_HOST}:21012",
+    "LgeSAXSegWorker": f"http://{SERVICE_HOST}:21013",
+    "CDSWorker": f"http://{SERVICE_HOST}:21020",
+    "NICMSWorker": f"http://{SERVICE_HOST}:21021",
+    "MRGWorker": f"http://{SERVICE_HOST}:21030",
+    "MetricsWorker": os.getenv(
+        "CARDIAC_METRICS_URL", f"http://{SERVICE_HOST}:21031"
+    ),
+    "MIRWorker": f"http://{SERVICE_HOST}:21040",
+    "SeqWorker": f"http://{SERVICE_HOST}:21050",
 }
 
 EXPERT_NAMES = [

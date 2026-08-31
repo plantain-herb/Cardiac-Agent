@@ -57,6 +57,8 @@ Upload (DICOM / NIfTI) → Agent Sequence Identification → Smart Frame Extract
 | **Disease Screening (CDS)** | Three-class classification: Normal / Ischemic Cardiomyopathy / Non-ischemic Cardiomyopathy |
 | **Cardiomyopathy Subtyping (NICMS)** | Five-class subtyping: HCM / DCM / Inflammatory / Restrictive / Arrhythmogenic |
 | **Cardiac Metrics** | Quantitative analysis: LV/RV ejection fraction, volumes, stroke volume, cardiac output, myocardial mass, 17-segment wall thickness |
+| **Segmentation Correction Loop** | Download automatic 4CH/SA NIfTI masks, upload either or both corrected masks, validate geometry/labels, and recalculate metrics without rerunning segmentation |
+| **Longitudinal Follow-up** | After two successful DICOM examinations in one session, detect the same PatientID with a different StudyInstanceUID, ask for confirmation, and display grouped deterministic deltas for LV/RV function, chamber dimensions, LGE mass, and segmental wall thickness, plus optional frozen wall-motion model evidence |
 | **Report Generation (MRG)** | Automated comprehensive cardiac evaluation report (PDF) integrating metrics, CDS, and NICMS results |
 | **Medical Info Retrieval (MIR)** | RAG-based medical knowledge retrieval for clinical questions |
 | **Agent VQA** | Direct visual question answering on cardiac MRI without calling expert workers |
@@ -505,12 +507,31 @@ The primary interface. Accepts multimodal inputs (DICOM ZIP, NIfTI, PNG images) 
 |---|---|---|
 | `/api/segment` | POST | Direct segmentation (single file) |
 | `/api/classify` | POST | Direct classification (multiple files) |
+| `/api/metrics/recalculate` | POST | Upload corrected 4CH and/or SA NIfTI masks for the current session and recalculate metrics without segmentation |
+| `/api/longitudinal/compare` | POST | Compare two de-identified ExamCards from the same patient and different examinations in the current session |
 | `/api/session/create` | POST | Create a new session |
 | `/api/session/{id}/files` | GET | List uploaded files |
 | `/api/session/{id}/frames` | GET | Get extracted frames |
 | `/api/download/{session_id}/{type}/{filename}` | GET  Download results (nifti / segmentation / reports) |
 | `/api/conversation/{session_id}` | GET | List conversation records |
 | `/health` | GET | Health check |
+
+The correction endpoint accepts multipart fields `session_id`, optional
+`corrected_4ch`, and optional `corrected_sa`; at least one corrected mask is
+required. An omitted modality reuses the active automatic or previously corrected
+mask. Uploaded masks must preserve the baseline NIfTI shape, voxel spacing,
+orientation, and origin. The 4CH label contract is `0–6`; the SA label contract is
+`0–4`.
+
+The longitudinal workflow is available for DICOM uploads with both `PatientID`
+and an examination identifier (`StudyInstanceUID`, with date/accession fallback).
+Raw PatientID values are never returned to the browser; matching uses a keyed,
+process-local digest. Metric change flags use versioned research-placeholder
+thresholds and are explicitly not clinically approved decision thresholds.
+The optional wall-motion card reports the frozen ProMax single-exam ConvNeXt
+abnormality probability at both visits, its delta and threshold transition. Its
+recorded validation AUROC is model-level provenance, not a patient measurement,
+and the probability is not presented as a calibrated disease-burden score.
 
 ## Supported Input Formats
 
