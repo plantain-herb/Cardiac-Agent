@@ -28,6 +28,10 @@ from app.config import (
     EXPERT_CKPT_CINE_4CH_SEG2_R,
     expert_weight_path,
 )
+from app.utils.segmentation_geometry import (
+    prepare_cine_4ch_for_model,
+    restore_cine_4ch_mask_to_source,
+)
 
 import argparse
 import asyncio
@@ -335,9 +339,13 @@ class HeartSeg4CHWorker:
             # Load image
             sitk_img, hu_volume, spacing = self.load_image(image_input)
             
-            # Run segmentation (no flip preprocessing)
+            # The released 4CH model was trained with the in-plane Y axis
+            # flipped (see src/CINE_4CH_SEG/example/main_dy.py). Restore the
+            # prediction afterwards so exported masks use the source grid.
             logger.info(f"Running segmentation on image with shape {hu_volume.shape}")
-            seg_mask = self.predictor.DY_predict(hu_volume, spacing)
+            model_volume = prepare_cine_4ch_for_model(hu_volume)
+            model_mask = self.predictor.DY_predict(model_volume, spacing)
+            seg_mask = restore_cine_4ch_mask_to_source(model_mask)
             logger.info(f"Segmentation complete. Unique labels: {np.unique(seg_mask)}")
             
             result = {
@@ -547,4 +555,3 @@ if __name__ == "__main__":
     
     # Start server
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
-

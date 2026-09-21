@@ -1070,6 +1070,17 @@ header {
   color: var(--success);
 }
 
+.metric-status.low,
+.metric-status.high {
+  background: rgba(255, 71, 87, 0.2);
+  color: var(--error);
+}
+
+.metric-status.unknown {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-muted);
+}
+
 .metric-status.mildly_reduced {
   background: rgba(255, 165, 2, 0.2);
   color: var(--warning);
@@ -1542,6 +1553,17 @@ header {
 .highlight-card .hl-status.normal {
   background: rgba(46, 213, 115, 0.2);
   color: var(--success);
+}
+
+.highlight-card .hl-status.low,
+.highlight-card .hl-status.high {
+  background: rgba(255, 71, 87, 0.2);
+  color: var(--error);
+}
+
+.highlight-card .hl-status.unknown {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-muted);
 }
 
 .highlight-card .hl-status.mildly_reduced {

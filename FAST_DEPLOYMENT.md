@@ -116,3 +116,24 @@ returned 36 rows and six flagged metrics.  The two upload calls took 40.7 s and
 
 The current zydb service and canonical pair are recorded in
 `../runtime_deployment/ZYDB_TIME_HORIZON_PORTAL.md` in the enclosing project.
+
+## Display correctness follow-up (2026-09-21)
+
+The live-service review found and fixed two independent presentation faults:
+
+- `_get_metric_status` previously returned `normal` for every metric except
+  LV/RV EF.  The report now classifies all values that have an explicit UI
+  reference interval as `low`, `normal`, or `high`; measurements without a
+  defined interval are `unknown` instead of being presented as normal.  The
+  browser repeats the interval check so cached report payloads are rendered
+  correctly after a refresh.
+- The legacy cine-4CH model requires an in-plane Y flip before inference.  The
+  worker had dropped that preprocessing step, producing masks over the chest
+  wall despite matching NIfTI metadata.  It now applies the model-space flip
+  and restores the prediction to the source image grid before saving.  Overlay
+  generation also rejects differences in size, spacing, origin, or direction
+  instead of silently drawing an invalid mask.
+
+The diagnosis was reproduced on the live 4090 input and verified with a
+controlled before/after three-frame overlay.  Keep both the orientation
+round-trip tests and the overlay geometry tests in the deployment gate.

@@ -527,7 +527,7 @@ function addBotMessage(data) {
         let value = data.metrics ? data.metrics[def.key] : undefined;
         let unit = '';
         let normalRange = '';
-        let status = 'normal';
+        let status = 'unknown';
         // Also search sections for more info
         data.report_data.sections.forEach(section => {
           section.items.forEach(item => {
@@ -535,7 +535,7 @@ function addBotMessage(data) {
               if (value === undefined) value = item.value;
               unit = item.unit;
               normalRange = item.normal_range;
-              status = item.status || 'normal';
+              status = resolveMetricStatus(item);
             }
           });
         });
@@ -590,8 +590,8 @@ function addBotMessage(data) {
       `;
       
       section.items.forEach(item => {
-        const statusClass = item.status || 'normal';
-        const statusLabel = getStatusLabel(item.status);
+        const statusClass = resolveMetricStatus(item);
+        const statusLabel = getStatusLabel(statusClass);
         // Check if this is a highlighted metric
         const hlDef = highlightDefs.find(d => d.key === item.key);
         const isHighlight = !!hlDef;
@@ -603,7 +603,7 @@ function addBotMessage(data) {
               <span class="metric-unit">${item.unit}</span>
               ${statusLabel ? `<span class="metric-status ${statusClass}">${statusLabel}</span>` : ''}
             </div>
-            <div class="metric-range">Normal: ${item.normal_range}</div>
+            ${item.normal_range ? `<div class="metric-range">Normal: ${item.normal_range}</div>` : ''}
           </div>
         `;
       });
@@ -1317,13 +1317,33 @@ function getEfStatus(value, type) {
 function getStatusLabel(status) {
   const labels = {
     'normal': 'Normal',
+    'low': 'Low',
+    'high': 'High',
     'abnormal': 'Abnormal',
     'mildly_reduced': 'Mildly Reduced',
     'severely_reduced': 'Severely Reduced',
     'elevated': 'Elevated',
-    'unknown': ''
+    'unknown': 'Not Classified'
   };
   return labels[status] || '';
+}
+
+function resolveMetricStatus(item) {
+  const supplied = item && item.status ? item.status : 'unknown';
+  if (['mildly_reduced', 'severely_reduced', 'elevated', 'abnormal'].includes(supplied)) {
+    return supplied;
+  }
+
+  const value = Number(item && item.value);
+  const range = String((item && item.normal_range) || '').trim();
+  const match = range.match(/^(-?\d+(?:\.\d+)?)\s*[-–—]\s*(-?\d+(?:\.\d+)?)$/);
+  if (!Number.isFinite(value) || !match) return supplied;
+
+  const lower = Number(match[1]);
+  const upper = Number(match[2]);
+  if (value < lower) return 'low';
+  if (value > upper) return 'high';
+  return 'normal';
 }
 
 function getSectionIcon(sectionName) {
