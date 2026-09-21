@@ -50,6 +50,22 @@ CONDA_ENV_DEMO="${CARDIAC_CONDA_ENV_DEMO:-cardiac_agent}"        # Portal backen
 # Conda初始化路径 (根据你的系统修改)
 CONDA_PATH="${CARDIAC_CONDA_PATH:-${HOME}/anaconda3}"
 
+# Deployment environments may be either Conda prefixes or ordinary venvs.
+# Render a small activation snippet once so every child shell uses the exact
+# configured prefix instead of accidentally falling back to its base Python.
+environment_activation() {
+    local env_name=$1
+    if [ -f "${env_name}/bin/activate" ]; then
+        printf "source '%s/bin/activate'" "${env_name}"
+    else
+        printf "source '%s/etc/profile.d/conda.sh'; conda activate '%s'" \
+            "${CONDA_PATH}" "${env_name}"
+    fi
+}
+ACTIVATE_AGENT="$(environment_activation "${CONDA_ENV_AGENT}")"
+ACTIVATE_EXPERT="$(environment_activation "${CONDA_ENV_EXPERT}")"
+ACTIVATE_DEMO="$(environment_activation "${CONDA_ENV_DEMO}")"
+
 # ============ GPU 配置 ============
 GPU_AGENT="${CARDIAC_GPU_AGENT:-0}"
 
@@ -163,8 +179,7 @@ start_controller() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_AGENT}
+        ${ACTIVATE_AGENT}
         python -m serve.controller \
             --host ${LISTEN_HOST} \
             --port ${PORT_CONTROLLER} \
@@ -205,8 +220,7 @@ start_agent() {
             > "${LOG_DIR}/agent_model.log" 2>&1 &
     elif [ "${AGENT_BACKEND}" = "legacy" ]; then
         CUDA_VISIBLE_DEVICES=${GPU_AGENT} nohup bash -c "
-            source ${CONDA_PATH}/etc/profile.d/conda.sh
-            conda activate ${CONDA_ENV_AGENT}
+            ${ACTIVATE_AGENT}
             cd ${PROJECT_DIR}
             python -m serve.agent_worker \
                 --host ${LISTEN_HOST} \
@@ -253,8 +267,7 @@ start_worker() {
     cd "${PROJECT_DIR}"
 
     CUDA_VISIBLE_DEVICES=${cuda_device} nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_EXPERT}
+        ${ACTIVATE_EXPERT}
         cd ${PROJECT_DIR}
         python -m serve.${module} \
             --host ${LISTEN_HOST} \
@@ -277,8 +290,7 @@ start_metrics_worker() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_EXPERT}
+        ${ACTIVATE_EXPERT}
         cd ${PROJECT_DIR}
         python -m serve.metrics_worker \
             --host ${LISTEN_HOST} \
@@ -302,8 +314,7 @@ start_mrg_worker() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_EXPERT}
+        ${ACTIVATE_EXPERT}
         cd ${PROJECT_DIR}
         python -m serve.mrg_worker \
             --host ${LISTEN_HOST} \
@@ -330,8 +341,7 @@ start_mir_worker() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_EXPERT}
+        ${ACTIVATE_EXPERT}
         cd ${PROJECT_DIR}
         python -m serve.mir_worker \
             --host ${LISTEN_HOST} \
@@ -355,8 +365,7 @@ start_seq_worker() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_EXPERT}
+        ${ACTIVATE_EXPERT}
         cd ${PROJECT_DIR}
         python -m serve.seq_worker \
             --host ${LISTEN_HOST} \
@@ -450,8 +459,7 @@ start_demo_backend() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_DEMO}
+        ${ACTIVATE_DEMO}
         cd ${PROJECT_DIR}
         python -m app.server --serve --port ${DEMO_BACKEND_PORT}
     " > "${LOG_DIR}/demo_backend.log" 2>&1 &
@@ -516,8 +524,7 @@ start_demo_frontend() {
     fi
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_DEMO}
+        ${ACTIVATE_DEMO}
         cd ${DEMO_DIR}
         python -m http.server ${DEMO_FRONTEND_PORT}
     " > "${LOG_DIR}/demo_frontend.log" 2>&1 &

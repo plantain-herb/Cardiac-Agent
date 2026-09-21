@@ -22,6 +22,7 @@ export CARDIAC_AGENT_BACKEND=vllm
 export CARDIAC_VLLM_PYTHON=/path/to/compatible-vllm-env/bin/python
 export CARDIAC_VLLM_MODEL_PATH=/path/to/model_views/mistral_safetensors
 export CARDIAC_VLLM_BRIDGE_PATH=/path/to/model_views/vision_bridge
+export CARDIAC_VLLM_GPU_MEMORY_UTILIZATION=0.72
 export CARDIAC_MRG_URL=http://127.0.0.1:21032
 export CARDIAC_CONDA_PATH=/path/to/anaconda3
 export CARDIAC_CONDA_ENV_AGENT=/path/to/service-environment
@@ -37,7 +38,7 @@ export CARDIAC_GPU_CDS=3 CARDIAC_GPU_NICMS=3
 The process binds to `127.0.0.1` by default.  Override
 `CARDIAC_LISTEN_HOST` only when the network boundary has been reviewed.
 
-## zydb compatibility gate (2026-09-21)
+## Accepted zydb deployment (2026-09-21)
 
 The split checkpoint is already present on zydb at:
 
@@ -46,32 +47,52 @@ The split checkpoint is already present on zydb at:
 /home/qutaiping/nas/dong_explore/cmla_time_horizon_v20260716_r1/models/vllm_LLaVA/model_views/vision_bridge
 ```
 
-The accepted reference service currently runs its controller, legacy Agent,
-Expert workers, and portal with
-`/home/qutaiping/nas/envs/dong_totalseg/bin/python3.11`.  Use that environment
-for the three `CARDIAC_CONDA_ENV_*` variables unless a replacement environment
-has been independently accepted.  The vLLM Agent remains isolated in
-`CARDIAC_VLLM_PYTHON`.
-
-Do **not** point the fast launcher at the existing
-`/home/qutaiping/nas/envs/dong_vllm_trt` environment.  It contains vLLM
-`0.6.6.post1`, whose `LLM` and input signatures do not support this external
-`prompt_embeds` bridge.  The proven bridge needs a compatible vLLM runtime
-with `enable_prompt_embeds=True` (the earlier Spark acceptance used vLLM
-0.25.0).  Build or migrate that compatible environment first, then rerun the
-two-examination acceptance replay.
-
-The compact MRG service is a separate process and must return HTTP 200 from
-`${CARDIAC_MRG_URL}/health` before the portal workers start.  Its accepted
-launcher source is outside this repository at:
+The live fast release and its isolated vLLM environment are:
 
 ```text
-/home/dongzifei/code/cardiac_agent_project/new_model_26_7/scripts/run_challenger_spark.sh
+/home/qutaiping/nas/dongzifei_runtime_explore/cardiac_agent_service_1f74107_fast_20260921
+/home/qutaiping/nas/envs/dong_cardiac_vllm_fast_0102
 ```
 
-It is a speed challenger, not a replacement scientific model: historical
-latency improved substantially, but LVEF/LVESV accuracy was mixed.  Keep it in
-challenger/shadow status until zydb replay acceptance is recorded.
+The accepted versions are vLLM 0.10.2, PyTorch 2.8.0+cu128, Transformers
+4.55.4, Tokenizers 0.21.4, and Hugging Face Hub 0.36.2.  The latter three are
+intentionally pinned: Transformers 5.17 removed a tokenizer attribute used by
+vLLM 0.10.2.  The Agent uses GPU 0 with memory utilization 0.72; 0.55 is too
+small for the 13.5-GiB decoder plus bridge and KV cache on a 24-GiB 4090.
+
+The controller, incumbent Expert workers, and portal use the existing venv
+`/home/qutaiping/nas/envs/dong_cardiac_portal`.  It resolves to the established
+base Python but also contributes portal-only dependencies, so it must be
+activated as a venv rather than replaced with the base Conda prefix.
+
+Do **not** point the Agent at the old
+`/home/qutaiping/nas/envs/dong_vllm_trt` environment.  Its vLLM 0.6.6.post1
+does not accept external `prompt_embeds`.
+
+The compact MRG service is a separate process and must return HTTP 200 from
+`${CARDIAC_MRG_URL}/health` before the portal workers start.  The live zydb
+release and environment are:
+
+```text
+/home/qutaiping/nas/dongzifei_runtime_explore/cardiac_mrg_fast_zydb_20260921
+/home/qutaiping/nas/envs/dong_cardiac_mrg_trt_fast
+```
+
+Its six TensorRT 10.7 engines were rebuilt on RTX 4090 and all passed the
+frozen parity vectors with argmax agreement 1.0.  The portal converts DICOM to
+NIfTI only inside the session cache for this fast profile; the challenger then
+enforces that allowed-root boundary.  Its scientific status remains
+challenger: runtime acceptance does not supersede the frozen accuracy caveats.
+
+The authoritative lifecycle wrapper is copied to zydb at:
+
+```text
+/home/qutaiping/nas/dongzifei_runtime_explore/zydb_fast_service_20260921.sh
+```
+
+Use `start`, `stop`, `restart`, or `status`.  Its tracked source is
+`../runtime_deployment/scripts/zydb_fast_service_20260921.sh` in the enclosing
+project.
 
 ## Acceptance contract
 
@@ -83,7 +104,15 @@ Fast is deployable only after all of the following pass on the target host:
 4. Browser offer after the second examination for the same patient with a
    different `StudyInstanceUID`.
 5. `POST /api/longitudinal/compare` and dashboard rendering.
-6. Output parity check against `main`, with latency captured separately.
+6. TensorRT frozen-vector parity; scientific comparison against `main` remains
+   a separate evaluation question.
+
+The 2026-09-21 zydb acceptance passed all 21 repository tests, registered ten
+controller models, completed a real vLLM generation, and replayed the canonical
+pair in one session.  Baseline and follow-up each returned 70 metrics; the
+second upload returned an enabled longitudinal offer; the comparison endpoint
+returned 36 rows and six flagged metrics.  The two upload calls took 40.7 s and
+49.2 s respectively in that cold acceptance run.
 
 The current zydb service and canonical pair are recorded in
 `../runtime_deployment/ZYDB_TIME_HORIZON_PORTAL.md` in the enclosing project.

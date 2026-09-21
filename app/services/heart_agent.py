@@ -13,6 +13,7 @@ from app.config import (
     FULL_MODALITY_TO_SHORT,
     LV_WALL_SEGMENTS,
     MODALITY_FULL_ORDER,
+    RUNTIME_PROFILE,
     RV_WALL_SEGMENTS,
     SEQ_TEMPLATE_PATTERNS,
     SEQ_TOKEN_NORMALIZE,
@@ -1179,6 +1180,31 @@ class HeartMRIAgent:
             )
             report_kwargs["slice_num_4ch"] = report_slice_num_4ch
             report_kwargs["slice_num_sa"] = report_slice_num_sa
+
+            # The compact fast MRG validates and consumes NIfTI files directly,
+            # whereas the legacy orchestrator accepted extracted DICOM folders.
+            # Keep conversion inside the session cache so the challenger's
+            # allowed-root boundary remains fail closed.
+            if RUNTIME_PROFILE == "fast":
+                nifti_output_dir = (
+                    os.path.join(CACHE_RESULTS_DIR, session_id, "nifti")
+                    if session_id
+                    else tempfile.mkdtemp()
+                )
+
+                def as_nifti(path, modality):
+                    if not path or path.endswith((".nii", ".nii.gz")):
+                        return path
+                    return convert_dcm_to_nifti(
+                        path,
+                        nifti_output_dir,
+                        f"fast_mrg_{modality}",
+                    )
+
+                image_4ch = as_nifti(image_4ch, "4ch")
+                image_sa = as_nifti(image_sa, "sax")
+                image_2ch = as_nifti(image_2ch, "2ch")
+                image_lge = as_nifti(image_lge, "lge")
 
             expert_result = self.expert_client.call_mrg(
                 worker_name, image_4ch, image_sa,

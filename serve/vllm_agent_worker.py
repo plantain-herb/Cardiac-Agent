@@ -10,6 +10,7 @@ import asyncio
 import base64
 import io
 import json
+import os
 import threading
 import time
 
@@ -185,7 +186,11 @@ def main():
     parser.add_argument("--model", required=True)
     parser.add_argument("--bridge", required=True)
     parser.add_argument("--max-model-len", type=int, default=4096)
-    parser.add_argument("--gpu-memory-utilization", type=float, default=0.55)
+    parser.add_argument(
+        "--gpu-memory-utilization",
+        type=float,
+        default=float(os.environ.get("CARDIAC_VLLM_GPU_MEMORY_UTILIZATION", "0.72")),
+    )
     args = parser.parse_args()
     worker = VLLMAgentWorker(args)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
