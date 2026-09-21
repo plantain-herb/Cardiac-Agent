@@ -217,6 +217,7 @@ async function sendMessage() {
   updateSendButton();
   processingBar.classList.add('active');
   const typingId = addTypingIndicator();
+  const requestStartedAt = performance.now();
 
   try {
     // 准备请求
@@ -258,14 +259,14 @@ async function sendMessage() {
     removeTypingIndicator(typingId);
     
     // 添加机器人回复
-    addBotMessage(data);
+    addBotMessage(attachProcessTime(data, requestStartedAt));
 
   } catch (error) {
     removeTypingIndicator(typingId);
-    addBotMessage({
+    addBotMessage(attachProcessTime({
       response: `Sorry, error processing request: ${error.message}`,
       error: true
-    });
+    }, requestStartedAt));
   } finally {
     isProcessing = false;
     updateSendButton();
@@ -404,6 +405,17 @@ function addBotMessage(data) {
     if (data.api_name) {
       content += `<div class="api-tag">API: ${data.api_name}</div>`;
     }
+  }
+
+  const processTimeSeconds = Number(data.process_time_seconds);
+  if (Number.isFinite(processTimeSeconds) && processTimeSeconds >= 0) {
+    content += `
+      <div class="process-time-card" title="Elapsed time from request submission to complete response">
+        <span class="process-time-icon">⏱</span>
+        <span class="process-time-label">Process Time</span>
+        <span class="process-time-value">${formatProcessTime(processTimeSeconds)}</span>
+      </div>
+    `;
   }
   
   // Prediction result (standalone classification without report)
@@ -893,6 +905,7 @@ async function runLongitudinalComparison(offer) {
   updateSendButton();
   processingBar.classList.add('active');
   const typingId = addTypingIndicator();
+  const requestStartedAt = performance.now();
   try {
     const formData = new FormData();
     formData.append('session_id', currentSessionId || '');
@@ -907,13 +920,13 @@ async function runLongitudinalComparison(offer) {
       throw new Error(data.error || `Request failed: ${response.status}`);
     }
     removeTypingIndicator(typingId);
-    addBotMessage(data);
+    addBotMessage(attachProcessTime(data, requestStartedAt));
   } catch (error) {
     removeTypingIndicator(typingId);
-    addBotMessage({
+    addBotMessage(attachProcessTime({
       response: `Follow-up comparison failed: ${error.message}`,
       error: true,
-    });
+    }, requestStartedAt));
   } finally {
     isProcessing = false;
     updateSendButton();
@@ -962,6 +975,7 @@ async function recalculateMetrics(workflowId) {
   status.textContent = 'Validating masks and recalculating metrics...';
   status.className = 'correction-status';
   const typingId = addTypingIndicator();
+  const requestStartedAt = performance.now();
 
   try {
     const response = await fetch(`${API_BASE_URL}${section.dataset.endpoint}`, {
@@ -975,7 +989,7 @@ async function recalculateMetrics(workflowId) {
     removeTypingIndicator(typingId);
     status.textContent = 'Recalculation complete.';
     status.className = 'correction-status success';
-    addBotMessage(data);
+    addBotMessage(attachProcessTime(data, requestStartedAt));
   } catch (error) {
     removeTypingIndicator(typingId);
     status.textContent = error.message;
@@ -1022,6 +1036,20 @@ function clearChat() {
 // 工具函数
 function formatTime(date) {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function attachProcessTime(data, startedAt) {
+  const elapsedSeconds = Math.max(0, (performance.now() - startedAt) / 1000);
+  return { ...data, process_time_seconds: elapsedSeconds };
+}
+
+function formatProcessTime(seconds) {
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)} s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds - minutes * 60;
+  return `${minutes}m ${remainingSeconds.toFixed(1)}s`;
 }
 
 function formatFileSize(bytes) {

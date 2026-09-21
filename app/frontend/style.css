@@ -940,6 +940,37 @@ header {
   border: 1px solid var(--border);
 }
 
+.process-time-card {
+  width: fit-content;
+  margin-top: 10px;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(78, 205, 196, 0.35);
+  border-radius: 8px;
+  background: rgba(78, 205, 196, 0.08);
+}
+
+.process-time-icon {
+  font-size: 13px;
+}
+
+.process-time-label {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.process-time-value {
+  color: var(--primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .report-header {
   background: var(--gradient-2);
   padding: 12px 16px;
