@@ -1,7 +1,11 @@
 // 配置
 // Use the same hostname as the page so an SSH tunnel opened on 127.0.0.1
 // does not get redirected through a localhost proxy or IPv6 resolution.
-const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:8005`;
+const requestedApiPort = new URLSearchParams(window.location.search).get('apiPort');
+const apiPort = /^\d{1,5}$/.test(requestedApiPort || '') && Number(requestedApiPort) <= 65535
+  ? requestedApiPort
+  : '8005';
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:${apiPort}`;
 
 // 状态
 let selectedFiles = [];

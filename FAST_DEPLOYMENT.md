@@ -137,3 +137,9 @@ The live-service review found and fixed two independent presentation faults:
 The diagnosis was reproduced on the live 4090 input and verified with a
 controlled before/after three-frame overlay.  Keep both the orientation
 round-trip tests and the overlay geometry tests in the deployment gate.
+
+For clients whose operating system reserves local ports 8080/8005, the
+frontend accepts a validated `apiPort` query parameter.  For example, forward
+the UI and API to local ports 18080/18005, then open
+`http://127.0.0.1:18080/?apiPort=18005`.  Without this parameter the established
+8005 API contract remains unchanged.
