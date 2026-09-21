@@ -27,6 +27,10 @@ export CARDIAC_CONDA_PATH=/path/to/anaconda3
 export CARDIAC_CONDA_ENV_AGENT=/path/to/service-environment
 export CARDIAC_CONDA_ENV_EXPERT=/path/to/service-environment
 export CARDIAC_CONDA_ENV_DEMO=/path/to/service-environment
+export CARDIAC_GPU_AGENT=0
+export CARDIAC_GPU_SEG_2CH=1 CARDIAC_GPU_SEG_4CH=1
+export CARDIAC_GPU_SEG_SA=2 CARDIAC_GPU_SEG_LGE=2
+export CARDIAC_GPU_CDS=3 CARDIAC_GPU_NICMS=3
 ./app/start.sh full
 ```
 

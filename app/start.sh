@@ -53,13 +53,13 @@ CONDA_PATH="${CARDIAC_CONDA_PATH:-${HOME}/anaconda3}"
 # ============ GPU 配置 ============
 GPU_AGENT="${CARDIAC_GPU_AGENT:-0}"
 
-GPU_SEG_2CH=0
-GPU_SEG_4CH=0
-GPU_SEG_SA=0
-GPU_SEG_LGE=0
+GPU_SEG_2CH="${CARDIAC_GPU_SEG_2CH:-0}"
+GPU_SEG_4CH="${CARDIAC_GPU_SEG_4CH:-0}"
+GPU_SEG_SA="${CARDIAC_GPU_SEG_SA:-0}"
+GPU_SEG_LGE="${CARDIAC_GPU_SEG_LGE:-0}"
 
-GPU_CDS=0
-GPU_NICMS=0
+GPU_CDS="${CARDIAC_GPU_CDS:-0}"
+GPU_NICMS="${CARDIAC_GPU_NICMS:-0}"
 
 # ============ 端口配置 ============
 PORT_CONTROLLER=30000
@@ -224,16 +224,22 @@ start_agent() {
     local agent_pid=$!
     echo ${agent_pid} > "${PID_DIR}/agent_model.pid"
     log_success "LLaVA Agent 已启动 | PID: ${agent_pid} | backend: ${AGENT_BACKEND} | GPU: ${GPU_AGENT}"
-    sleep 30
-
-    if ! kill -0 "${agent_pid}" 2>/dev/null; then
-        log_error "Agent exited during startup; inspect ${LOG_DIR}/agent_model.log"
-        return 1
-    fi
-    if ! curl -fsS "http://127.0.0.1:${PORT_AGENT}/health" >/dev/null; then
-        log_error "Agent health check failed; inspect ${LOG_DIR}/agent_model.log"
-        return 1
-    fi
+    local waited=0
+    local max_wait="${CARDIAC_AGENT_START_TIMEOUT:-360}"
+    while [ "${waited}" -lt "${max_wait}" ]; do
+        if ! kill -0 "${agent_pid}" 2>/dev/null; then
+            log_error "Agent exited during startup; inspect ${LOG_DIR}/agent_model.log"
+            return 1
+        fi
+        if curl -fsS "http://127.0.0.1:${PORT_AGENT}/health" >/dev/null 2>&1; then
+            log_success "Agent health check passed after ${waited}s"
+            return 0
+        fi
+        sleep 5
+        waited=$((waited + 5))
+    done
+    log_error "Agent health check timed out after ${max_wait}s; inspect ${LOG_DIR}/agent_model.log"
+    return 1
 }
 
 start_worker() {
