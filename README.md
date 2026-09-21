@@ -17,6 +17,11 @@ The system orchestrates a fine-tuned LLaVA-based agent with multiple expert mode
 
 ## Demo
 
+Deployment operators: use [FAST_DEPLOYMENT.md](FAST_DEPLOYMENT.md) for the
+isolated vLLM + compact-MRG challenger profile.  `main` remains the reference
+runtime; the `fast` profile must pass the documented two-examination replay
+before it replaces that service.
+
 ### Cardiac Structure Segmentation
 
 Upload cardiac MRI and let the agent automatically identify sequences, select expert segmentation models, and return labeled results.

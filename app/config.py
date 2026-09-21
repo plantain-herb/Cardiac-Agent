@@ -16,6 +16,7 @@ load_dotenv()
 # keeps the single-host defaults while allowing an SSH-only frontend/backend
 # to reuse workers on another trusted host.
 SERVICE_HOST = os.getenv("CARDIAC_SERVICE_HOST", "localhost")
+RUNTIME_PROFILE = os.getenv("CARDIAC_RUNTIME_PROFILE", "fast").strip().lower()
 CONTROLLER_URL = os.getenv(
     "CARDIAC_CONTROLLER_URL", f"http://{SERVICE_HOST}:30000"
 )
@@ -30,7 +31,10 @@ EXPERT_WORKERS = {
     "LgeSAXSegWorker": f"http://{SERVICE_HOST}:21013",
     "CDSWorker": f"http://{SERVICE_HOST}:21020",
     "NICMSWorker": f"http://{SERVICE_HOST}:21021",
-    "MRGWorker": f"http://{SERVICE_HOST}:21030",
+    "MRGWorker": os.getenv(
+        "CARDIAC_MRG_URL",
+        f"http://{SERVICE_HOST}:{21032 if RUNTIME_PROFILE == 'fast' else 21030}",
+    ),
     "MetricsWorker": os.getenv(
         "CARDIAC_METRICS_URL", f"http://{SERVICE_HOST}:21031"
     ),
