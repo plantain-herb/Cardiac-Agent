@@ -23,7 +23,7 @@ from app.config import (
     EXPERT_DIR_CINE_SA_FIRST,
     EXPERT_DIR_CINE_SA_SECOND,
     EXPERT_CKPT_CINE_SAX_SEG1,
-    EXPERT_CKPT_CINE_SAX_SEG2,
+    EXPERT_CKPT_CINE_SAX_SEG2_PATH,
     expert_weight_path,
 )
 
@@ -466,7 +466,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-file-DY-second",
         type=str,
-        default=expert_weight_path(EXPERT_DIR_CINE_SA_SECOND, EXPERT_CKPT_CINE_SAX_SEG2),
+        default=EXPERT_CKPT_CINE_SAX_SEG2_PATH,
     )
     parser.add_argument(
         "--network-file-DY-first",
@@ -521,4 +521,3 @@ if __name__ == "__main__":
     
     # Start server
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
-

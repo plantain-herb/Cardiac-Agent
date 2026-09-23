@@ -428,6 +428,31 @@ def save_segmentation_images(
         return {"error": f"分割结果文件不存在: {seg_nii_path}"}
 
     seg_img = sitk.ReadImage(seg_nii_path)
+
+    geometry_checks = {
+        "dimension": (sitk_img.GetDimension(), seg_img.GetDimension()),
+        "size": (sitk_img.GetSize(), seg_img.GetSize()),
+    }
+    for name, (source_value, mask_value) in geometry_checks.items():
+        if source_value != mask_value:
+            return {
+                "error": (
+                    "Cannot render segmentation overlay: source image and mask "
+                    f"have different {name} ({source_value} vs {mask_value})."
+                )
+            }
+    for name, source_value, mask_value in (
+        ("spacing", sitk_img.GetSpacing(), seg_img.GetSpacing()),
+        ("origin", sitk_img.GetOrigin(), seg_img.GetOrigin()),
+        ("direction", sitk_img.GetDirection(), seg_img.GetDirection()),
+    ):
+        if not np.allclose(source_value, mask_value, rtol=1e-5, atol=1e-5):
+            return {
+                "error": (
+                    "Cannot render segmentation overlay: source image and mask "
+                    f"have different {name}."
+                )
+            }
     seg_volume = sitk.GetArrayFromImage(seg_img)
 
     total_frames = original_volume.shape[0]

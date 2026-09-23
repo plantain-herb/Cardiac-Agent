@@ -31,24 +31,51 @@ DEMO_DIR="${PROJECT_DIR}/app/frontend"
 DEMO_BACKEND_PORT=8005
 DEMO_FRONTEND_PORT=8080
 
+# Runtime profile.  The fast branch deliberately defaults to the vLLM Agent
+# plus the separately managed compact MRG challenger.  Missing fast runtimes
+# are fatal: never silently fall back to the slower reference implementation.
+RUNTIME_PROFILE="${CARDIAC_RUNTIME_PROFILE:-fast}"
+AGENT_BACKEND="${CARDIAC_AGENT_BACKEND:-vllm}"
+LISTEN_HOST="${CARDIAC_LISTEN_HOST:-127.0.0.1}"
+VLLM_PYTHON="${CARDIAC_VLLM_PYTHON:-}"
+VLLM_MODEL_PATH="${CARDIAC_VLLM_MODEL_PATH:-}"
+VLLM_BRIDGE_PATH="${CARDIAC_VLLM_BRIDGE_PATH:-}"
+MRG_URL="${CARDIAC_MRG_URL:-}"
+
 # ============ Conda 环境配置 ============
-CONDA_ENV_AGENT="cardiac_agent"           # LLaVA Agent模型环境
-CONDA_ENV_EXPERT="cardiac_models"     # Expert模型环境 (分割/分类)
-CONDA_ENV_DEMO="cardiac_agent"           # Demo前后端环境
+CONDA_ENV_AGENT="${CARDIAC_CONDA_ENV_AGENT:-cardiac_agent}"       # Controller / legacy Agent
+CONDA_ENV_EXPERT="${CARDIAC_CONDA_ENV_EXPERT:-cardiac_models}"   # Expert models
+CONDA_ENV_DEMO="${CARDIAC_CONDA_ENV_DEMO:-cardiac_agent}"        # Portal backend/frontend
 
 # Conda初始化路径 (根据你的系统修改)
-CONDA_PATH="${HOME}/anaconda3"
+CONDA_PATH="${CARDIAC_CONDA_PATH:-${HOME}/anaconda3}"
+
+# Deployment environments may be either Conda prefixes or ordinary venvs.
+# Render a small activation snippet once so every child shell uses the exact
+# configured prefix instead of accidentally falling back to its base Python.
+environment_activation() {
+    local env_name=$1
+    if [ -f "${env_name}/bin/activate" ]; then
+        printf "source '%s/bin/activate'" "${env_name}"
+    else
+        printf "source '%s/etc/profile.d/conda.sh'; conda activate '%s'" \
+            "${CONDA_PATH}" "${env_name}"
+    fi
+}
+ACTIVATE_AGENT="$(environment_activation "${CONDA_ENV_AGENT}")"
+ACTIVATE_EXPERT="$(environment_activation "${CONDA_ENV_EXPERT}")"
+ACTIVATE_DEMO="$(environment_activation "${CONDA_ENV_DEMO}")"
 
 # ============ GPU 配置 ============
-GPU_AGENT=0
+GPU_AGENT="${CARDIAC_GPU_AGENT:-0}"
 
-GPU_SEG_2CH=0
-GPU_SEG_4CH=0
-GPU_SEG_SA=0
-GPU_SEG_LGE=0
+GPU_SEG_2CH="${CARDIAC_GPU_SEG_2CH:-0}"
+GPU_SEG_4CH="${CARDIAC_GPU_SEG_4CH:-0}"
+GPU_SEG_SA="${CARDIAC_GPU_SEG_SA:-0}"
+GPU_SEG_LGE="${CARDIAC_GPU_SEG_LGE:-0}"
 
-GPU_CDS=0
-GPU_NICMS=0
+GPU_CDS="${CARDIAC_GPU_CDS:-0}"
+GPU_NICMS="${CARDIAC_GPU_NICMS:-0}"
 
 # ============ 端口配置 ============
 PORT_CONTROLLER=30000
@@ -62,7 +89,14 @@ PORT_SEG_LGE=21013
 PORT_CDS=21020
 PORT_NICMS=21021
 
-PORT_MRG=21030
+if [ "${RUNTIME_PROFILE}" = "fast" ]; then
+    PORT_MRG="${CARDIAC_MRG_PORT:-21032}"
+else
+    PORT_MRG="${CARDIAC_MRG_PORT:-21030}"
+fi
+MRG_URL="${MRG_URL:-http://127.0.0.1:${PORT_MRG}}"
+export CARDIAC_RUNTIME_PROFILE="${RUNTIME_PROFILE}"
+export CARDIAC_MRG_URL="${MRG_URL}"
 PORT_METRICS=21031
 PORT_MIR=21040
 PORT_SEQ=21050
@@ -111,6 +145,33 @@ activate_conda() {
     conda activate "${env_name}"
 }
 
+preflight_fast_profile() {
+    if [ "${RUNTIME_PROFILE}" != "fast" ]; then
+        return 0
+    fi
+    if [ "${AGENT_BACKEND}" != "vllm" ]; then
+        log_error "fast profile requires CARDIAC_AGENT_BACKEND=vllm"
+        return 1
+    fi
+    if [ -z "${VLLM_PYTHON}" ] || [ ! -x "${VLLM_PYTHON}" ]; then
+        log_error "fast profile requires executable CARDIAC_VLLM_PYTHON"
+        return 1
+    fi
+    if [ -z "${VLLM_MODEL_PATH}" ] || [ ! -d "${VLLM_MODEL_PATH}" ]; then
+        log_error "fast profile requires CARDIAC_VLLM_MODEL_PATH (Mistral decoder directory)"
+        return 1
+    fi
+    if [ -z "${VLLM_BRIDGE_PATH}" ] || [ ! -d "${VLLM_BRIDGE_PATH}" ]; then
+        log_error "fast profile requires CARDIAC_VLLM_BRIDGE_PATH (vision bridge directory)"
+        return 1
+    fi
+    if ! curl -fsS "${MRG_URL%/}/health" >/dev/null; then
+        log_error "fast profile requires the compact MRG challenger at ${MRG_URL}; no legacy fallback is allowed"
+        return 1
+    fi
+    log_success "fast runtime preflight passed"
+}
+
 # ============ 启动各项服务 ============
 
 start_controller() {
@@ -118,10 +179,9 @@ start_controller() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_AGENT}
+        ${ACTIVATE_AGENT}
         python -m serve.controller \
-            --host 0.0.0.0 \
+            --host ${LISTEN_HOST} \
             --port ${PORT_CONTROLLER} \
             --dispatch-method shortest_queue
     " > "${LOG_DIR}/controller.log" 2>&1 &
@@ -132,26 +192,68 @@ start_controller() {
 }
 
 start_agent() {
-    log_info "启动 LLaVA Agent | port: ${PORT_AGENT} | GPU: ${GPU_AGENT} | env: ${CONDA_ENV_AGENT}"
+    log_info "启动 LLaVA Agent | backend: ${AGENT_BACKEND} | port: ${PORT_AGENT} | GPU: ${GPU_AGENT}"
     cd "${PROJECT_DIR}"
     export CUDA_LAUNCH_BLOCKING=1
 
-    CUDA_VISIBLE_DEVICES=${GPU_AGENT} nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_AGENT}
-        cd ${PROJECT_DIR}
-        python -m serve.agent_worker \
-            --host 0.0.0.0 \
-            --controller-address http://localhost:${PORT_CONTROLLER} \
-            --port ${PORT_AGENT} \
-            --worker-address http://localhost:${PORT_AGENT} \
-            --model-path ${AGENT_MODEL_PATH} \
-            --device cuda
-    " > "${LOG_DIR}/agent_model.log" 2>&1 &
+    if [ "${AGENT_BACKEND}" = "vllm" ]; then
+        if [ -z "${VLLM_PYTHON}" ] || [ ! -x "${VLLM_PYTHON}" ]; then
+            log_error "fast profile requires executable CARDIAC_VLLM_PYTHON"
+            return 1
+        fi
+        if [ -z "${VLLM_MODEL_PATH}" ] || [ ! -d "${VLLM_MODEL_PATH}" ]; then
+            log_error "fast profile requires CARDIAC_VLLM_MODEL_PATH (Mistral decoder directory)"
+            return 1
+        fi
+        if [ -z "${VLLM_BRIDGE_PATH}" ] || [ ! -d "${VLLM_BRIDGE_PATH}" ]; then
+            log_error "fast profile requires CARDIAC_VLLM_BRIDGE_PATH (vision bridge directory)"
+            return 1
+        fi
 
-    echo $! > "${PID_DIR}/agent_model.pid"
-    log_success "LLaVA Agent 已启动 | PID: $! | GPU: ${GPU_AGENT}"
-    sleep 30
+        CUDA_VISIBLE_DEVICES=${GPU_AGENT} nohup "${VLLM_PYTHON}" -m serve.vllm_agent_worker \
+            --host "${LISTEN_HOST}" \
+            --controller-address "http://127.0.0.1:${PORT_CONTROLLER}" \
+            --port "${PORT_AGENT}" \
+            --worker-address "http://127.0.0.1:${PORT_AGENT}" \
+            --model "${VLLM_MODEL_PATH}" \
+            --bridge "${VLLM_BRIDGE_PATH}" \
+            > "${LOG_DIR}/agent_model.log" 2>&1 &
+    elif [ "${AGENT_BACKEND}" = "legacy" ]; then
+        CUDA_VISIBLE_DEVICES=${GPU_AGENT} nohup bash -c "
+            ${ACTIVATE_AGENT}
+            cd ${PROJECT_DIR}
+            python -m serve.agent_worker \
+                --host ${LISTEN_HOST} \
+                --controller-address http://127.0.0.1:${PORT_CONTROLLER} \
+                --port ${PORT_AGENT} \
+                --worker-address http://127.0.0.1:${PORT_AGENT} \
+                --model-path ${AGENT_MODEL_PATH} \
+                --device cuda
+        " > "${LOG_DIR}/agent_model.log" 2>&1 &
+    else
+        log_error "unknown CARDIAC_AGENT_BACKEND=${AGENT_BACKEND}; expected vllm or legacy"
+        return 1
+    fi
+
+    local agent_pid=$!
+    echo ${agent_pid} > "${PID_DIR}/agent_model.pid"
+    log_success "LLaVA Agent 已启动 | PID: ${agent_pid} | backend: ${AGENT_BACKEND} | GPU: ${GPU_AGENT}"
+    local waited=0
+    local max_wait="${CARDIAC_AGENT_START_TIMEOUT:-360}"
+    while [ "${waited}" -lt "${max_wait}" ]; do
+        if ! kill -0 "${agent_pid}" 2>/dev/null; then
+            log_error "Agent exited during startup; inspect ${LOG_DIR}/agent_model.log"
+            return 1
+        fi
+        if curl -fsS "http://127.0.0.1:${PORT_AGENT}/health" >/dev/null 2>&1; then
+            log_success "Agent health check passed after ${waited}s"
+            return 0
+        fi
+        sleep 5
+        waited=$((waited + 5))
+    done
+    log_error "Agent health check timed out after ${max_wait}s; inspect ${LOG_DIR}/agent_model.log"
+    return 1
 }
 
 start_worker() {
@@ -165,11 +267,10 @@ start_worker() {
     cd "${PROJECT_DIR}"
 
     CUDA_VISIBLE_DEVICES=${cuda_device} nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_EXPERT}
+        ${ACTIVATE_EXPERT}
         cd ${PROJECT_DIR}
         python -m serve.${module} \
-            --host 0.0.0.0 \
+            --host ${LISTEN_HOST} \
             --port ${port} \
             --worker-address http://localhost:${port} \
             --controller-address http://localhost:${PORT_CONTROLLER} \
@@ -189,11 +290,10 @@ start_metrics_worker() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_EXPERT}
+        ${ACTIVATE_EXPERT}
         cd ${PROJECT_DIR}
         python -m serve.metrics_worker \
-            --host 0.0.0.0 \
+            --host ${LISTEN_HOST} \
             --port ${port} \
             --worker-address http://localhost:${port} \
             --controller-address http://localhost:${PORT_CONTROLLER} \
@@ -214,11 +314,10 @@ start_mrg_worker() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_EXPERT}
+        ${ACTIVATE_EXPERT}
         cd ${PROJECT_DIR}
         python -m serve.mrg_worker \
-            --host 0.0.0.0 \
+            --host ${LISTEN_HOST} \
             --port ${port} \
             --worker-address http://localhost:${port} \
             --controller-address http://localhost:${PORT_CONTROLLER} \
@@ -242,11 +341,10 @@ start_mir_worker() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_EXPERT}
+        ${ACTIVATE_EXPERT}
         cd ${PROJECT_DIR}
         python -m serve.mir_worker \
-            --host 0.0.0.0 \
+            --host ${LISTEN_HOST} \
             --port ${port} \
             --worker-address http://localhost:${port} \
             --controller-address http://localhost:${PORT_CONTROLLER} \
@@ -267,11 +365,10 @@ start_seq_worker() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_EXPERT}
+        ${ACTIVATE_EXPERT}
         cd ${PROJECT_DIR}
         python -m serve.seq_worker \
-            --host 0.0.0.0 \
+            --host ${LISTEN_HOST} \
             --port ${port} \
             --worker-address http://localhost:${port} \
             --controller-address http://localhost:${PORT_CONTROLLER} \
@@ -286,6 +383,11 @@ start_seq_worker() {
 }
 
 start_workers() {
+    if [ "${RUNTIME_PROFILE}" = "fast" ] && ! curl -fsS "${MRG_URL%/}/health" >/dev/null; then
+        log_error "fast profile requires the compact MRG challenger at ${MRG_URL}; no legacy fallback is allowed"
+        return 1
+    fi
+
     log_info "========== 启动 Expert Workers =========="
     log_info "GPU 分配: Seg2CH=${GPU_SEG_2CH}, Seg4CH=${GPU_SEG_4CH}, SegSA=${GPU_SEG_SA}, SegLGE=${GPU_SEG_LGE}, CDS=${GPU_CDS}, NICMS=${GPU_NICMS}"
 
@@ -302,7 +404,11 @@ start_workers() {
     log_info "--- Service Workers (Metrics, MRG, MIR) ---"
     sleep 5
     start_metrics_worker
-    start_mrg_worker
+    if [ "${RUNTIME_PROFILE}" = "fast" ]; then
+        log_success "compact MRG challenger healthy: ${MRG_URL}"
+    else
+        start_mrg_worker
+    fi
     start_mir_worker
 
     log_info "--- Sequence Analysis Worker (依赖 Agent) ---"
@@ -353,8 +459,7 @@ start_demo_backend() {
     cd "${PROJECT_DIR}"
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_DEMO}
+        ${ACTIVATE_DEMO}
         cd ${PROJECT_DIR}
         python -m app.server --serve --port ${DEMO_BACKEND_PORT}
     " > "${LOG_DIR}/demo_backend.log" 2>&1 &
@@ -419,8 +524,7 @@ start_demo_frontend() {
     fi
 
     nohup bash -c "
-        source ${CONDA_PATH}/etc/profile.d/conda.sh
-        conda activate ${CONDA_ENV_DEMO}
+        ${ACTIVATE_DEMO}
         cd ${DEMO_DIR}
         python -m http.server ${DEMO_FRONTEND_PORT}
     " > "${LOG_DIR}/demo_frontend.log" 2>&1 &
@@ -519,6 +623,7 @@ stop_all() {
     local patterns=(
         "serve.controller"
         "serve.agent_worker"
+        "serve.vllm_agent_worker"
         "serve.cine_2ch_seg_worker"
         "serve.cine_4ch_seg_worker"
         "serve.cine_sa_seg_worker"
@@ -701,10 +806,19 @@ check_status() {
         "cds:${PORT_CDS}:${GPU_CDS}"
         "nicms:${PORT_NICMS}:${GPU_NICMS}"
         "metrics:${PORT_METRICS}:CPU"
-        "mrg:${PORT_MRG}:CPU"
         "mir:${PORT_MIR}:CPU"
         "seq:${PORT_SEQ}:CPU"
     )
+
+    if [ "${RUNTIME_PROFILE}" = "fast" ]; then
+        if curl -fsS "${MRG_URL%/}/health" >/dev/null 2>&1; then
+            echo -e "compact_mrg (${MRG_URL}): ${GREEN}运行中${NC} (external challenger)"
+        else
+            echo -e "compact_mrg (${MRG_URL}): ${RED}不可达${NC} (external challenger)"
+        fi
+    else
+        workers+=("mrg:${PORT_MRG}:CPU")
+    fi
 
     for w in "${workers[@]}"; do
         name=$(echo "$w" | cut -d: -f1)
@@ -778,10 +892,19 @@ health_check() {
         ["CDS"]="${PORT_CDS}:${GPU_CDS}"
         ["NICMS"]="${PORT_NICMS}:${GPU_NICMS}"
         ["Metrics"]="${PORT_METRICS}:CPU"
-        ["MRG"]="${PORT_MRG}:CPU"
         ["MIR"]="${PORT_MIR}:CPU"
         ["Seq"]="${PORT_SEQ}:CPU"
     )
+
+    if [ "${RUNTIME_PROFILE}" = "fast" ]; then
+        if curl -fsS "${MRG_URL%/}/health" >/dev/null 2>&1; then
+            echo -e "compact MRG (${MRG_URL}): ${GREEN}健康${NC} [external challenger]"
+        else
+            echo -e "compact MRG (${MRG_URL}): ${RED}不可达${NC} [external challenger]"
+        fi
+    else
+        worker_info["MRG"]="${PORT_MRG}:CPU"
+    fi
 
     for name in "${!worker_info[@]}"; do
         info="${worker_info[$name]}"
@@ -830,6 +953,9 @@ show_gpu_config() {
     echo "========== 环境与GPU配置 =========="
     echo ""
     echo "Project Root: ${PROJECT_DIR}"
+    echo "Runtime profile: ${RUNTIME_PROFILE}"
+    echo "Agent backend: ${AGENT_BACKEND}"
+    echo "MRG URL: ${MRG_URL}"
     echo "Conda路径: ${CONDA_PATH}"
     echo ""
     echo "Conda环境:"
@@ -896,6 +1022,7 @@ print_banner
 
 case "$1" in
     all)
+        preflight_fast_profile
         start_controller
         sleep 2
         start_agent
@@ -924,6 +1051,7 @@ case "$1" in
         ;;
     full)
         log_info "========== 启动完整系统 (所有服务 + Demo) =========="
+        preflight_fast_profile
         start_controller
         sleep 2
         start_agent
@@ -975,6 +1103,7 @@ case "$1" in
         show_gpu_config
         ;;
     restart)
+        preflight_fast_profile
         stop_all
         sleep 2
         start_controller

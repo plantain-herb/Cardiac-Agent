@@ -1,7 +1,11 @@
 // 配置
 // Use the same hostname as the page so an SSH tunnel opened on 127.0.0.1
 // does not get redirected through a localhost proxy or IPv6 resolution.
-const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:8005`;
+const requestedApiPort = new URLSearchParams(window.location.search).get('apiPort');
+const apiPort = /^\d{1,5}$/.test(requestedApiPort || '') && Number(requestedApiPort) <= 65535
+  ? requestedApiPort
+  : '8005';
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:${apiPort}`;
 
 // 状态
 let selectedFiles = [];
@@ -217,6 +221,7 @@ async function sendMessage() {
   updateSendButton();
   processingBar.classList.add('active');
   const typingId = addTypingIndicator();
+  const requestStartedAt = performance.now();
 
   try {
     // 准备请求
@@ -258,14 +263,14 @@ async function sendMessage() {
     removeTypingIndicator(typingId);
     
     // 添加机器人回复
-    addBotMessage(data);
+    addBotMessage(attachProcessTime(data, requestStartedAt));
 
   } catch (error) {
     removeTypingIndicator(typingId);
-    addBotMessage({
+    addBotMessage(attachProcessTime({
       response: `Sorry, error processing request: ${error.message}`,
       error: true
-    });
+    }, requestStartedAt));
   } finally {
     isProcessing = false;
     updateSendButton();
@@ -405,6 +410,17 @@ function addBotMessage(data) {
       content += `<div class="api-tag">API: ${data.api_name}</div>`;
     }
   }
+
+  const processTimeSeconds = Number(data.process_time_seconds);
+  if (Number.isFinite(processTimeSeconds) && processTimeSeconds >= 0) {
+    content += `
+      <div class="process-time-card" title="Elapsed time from request submission to complete response">
+        <span class="process-time-icon">⏱</span>
+        <span class="process-time-label">Process Time</span>
+        <span class="process-time-value">${formatProcessTime(processTimeSeconds)}</span>
+      </div>
+    `;
+  }
   
   // Prediction result (standalone classification without report)
   const hasReportClassification = data.report_data && data.report_data.sections &&
@@ -515,7 +531,7 @@ function addBotMessage(data) {
         let value = data.metrics ? data.metrics[def.key] : undefined;
         let unit = '';
         let normalRange = '';
-        let status = 'normal';
+        let status = 'unknown';
         // Also search sections for more info
         data.report_data.sections.forEach(section => {
           section.items.forEach(item => {
@@ -523,7 +539,7 @@ function addBotMessage(data) {
               if (value === undefined) value = item.value;
               unit = item.unit;
               normalRange = item.normal_range;
-              status = item.status || 'normal';
+              status = resolveMetricStatus(item);
             }
           });
         });
@@ -578,8 +594,8 @@ function addBotMessage(data) {
       `;
       
       section.items.forEach(item => {
-        const statusClass = item.status || 'normal';
-        const statusLabel = getStatusLabel(item.status);
+        const statusClass = resolveMetricStatus(item);
+        const statusLabel = getStatusLabel(statusClass);
         // Check if this is a highlighted metric
         const hlDef = highlightDefs.find(d => d.key === item.key);
         const isHighlight = !!hlDef;
@@ -591,7 +607,7 @@ function addBotMessage(data) {
               <span class="metric-unit">${item.unit}</span>
               ${statusLabel ? `<span class="metric-status ${statusClass}">${statusLabel}</span>` : ''}
             </div>
-            <div class="metric-range">Normal: ${item.normal_range}</div>
+            ${item.normal_range ? `<div class="metric-range">Normal: ${item.normal_range}</div>` : ''}
           </div>
         `;
       });
@@ -893,6 +909,7 @@ async function runLongitudinalComparison(offer) {
   updateSendButton();
   processingBar.classList.add('active');
   const typingId = addTypingIndicator();
+  const requestStartedAt = performance.now();
   try {
     const formData = new FormData();
     formData.append('session_id', currentSessionId || '');
@@ -907,13 +924,13 @@ async function runLongitudinalComparison(offer) {
       throw new Error(data.error || `Request failed: ${response.status}`);
     }
     removeTypingIndicator(typingId);
-    addBotMessage(data);
+    addBotMessage(attachProcessTime(data, requestStartedAt));
   } catch (error) {
     removeTypingIndicator(typingId);
-    addBotMessage({
+    addBotMessage(attachProcessTime({
       response: `Follow-up comparison failed: ${error.message}`,
       error: true,
-    });
+    }, requestStartedAt));
   } finally {
     isProcessing = false;
     updateSendButton();
@@ -962,6 +979,7 @@ async function recalculateMetrics(workflowId) {
   status.textContent = 'Validating masks and recalculating metrics...';
   status.className = 'correction-status';
   const typingId = addTypingIndicator();
+  const requestStartedAt = performance.now();
 
   try {
     const response = await fetch(`${API_BASE_URL}${section.dataset.endpoint}`, {
@@ -975,7 +993,7 @@ async function recalculateMetrics(workflowId) {
     removeTypingIndicator(typingId);
     status.textContent = 'Recalculation complete.';
     status.className = 'correction-status success';
-    addBotMessage(data);
+    addBotMessage(attachProcessTime(data, requestStartedAt));
   } catch (error) {
     removeTypingIndicator(typingId);
     status.textContent = error.message;
@@ -1022,6 +1040,20 @@ function clearChat() {
 // 工具函数
 function formatTime(date) {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function attachProcessTime(data, startedAt) {
+  const elapsedSeconds = Math.max(0, (performance.now() - startedAt) / 1000);
+  return { ...data, process_time_seconds: elapsedSeconds };
+}
+
+function formatProcessTime(seconds) {
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)} s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds - minutes * 60;
+  return `${minutes}m ${remainingSeconds.toFixed(1)}s`;
 }
 
 function formatFileSize(bytes) {
@@ -1289,13 +1321,33 @@ function getEfStatus(value, type) {
 function getStatusLabel(status) {
   const labels = {
     'normal': 'Normal',
+    'low': 'Low',
+    'high': 'High',
     'abnormal': 'Abnormal',
     'mildly_reduced': 'Mildly Reduced',
     'severely_reduced': 'Severely Reduced',
     'elevated': 'Elevated',
-    'unknown': ''
+    'unknown': 'Not Classified'
   };
   return labels[status] || '';
+}
+
+function resolveMetricStatus(item) {
+  const supplied = item && item.status ? item.status : 'unknown';
+  if (['mildly_reduced', 'severely_reduced', 'elevated', 'abnormal'].includes(supplied)) {
+    return supplied;
+  }
+
+  const value = Number(item && item.value);
+  const range = String((item && item.normal_range) || '').trim();
+  const match = range.match(/^(-?\d+(?:\.\d+)?)\s*[-–—]\s*(-?\d+(?:\.\d+)?)$/);
+  if (!Number.isFinite(value) || !match) return supplied;
+
+  const lower = Number(match[1]);
+  const upper = Number(match[2]);
+  if (value < lower) return 'low';
+  if (value > upper) return 'high';
+  return 'normal';
 }
 
 function getSectionIcon(sectionName) {

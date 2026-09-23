@@ -28,7 +28,6 @@ from app.config import (
     EXPERT_CKPT_CINE_4CH_SEG2_R,
     expert_weight_path,
 )
-
 import argparse
 import asyncio
 import time
@@ -335,7 +334,6 @@ class HeartSeg4CHWorker:
             # Load image
             sitk_img, hu_volume, spacing = self.load_image(image_input)
             
-            # Run segmentation (no flip preprocessing)
             logger.info(f"Running segmentation on image with shape {hu_volume.shape}")
             seg_mask = self.predictor.DY_predict(hu_volume, spacing)
             logger.info(f"Segmentation complete. Unique labels: {np.unique(seg_mask)}")
@@ -547,4 +545,3 @@ if __name__ == "__main__":
     
     # Start server
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
-

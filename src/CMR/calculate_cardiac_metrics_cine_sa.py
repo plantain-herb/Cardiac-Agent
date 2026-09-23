@@ -18,11 +18,18 @@ LV_BLOOD_POOL_ID = 2
 RV_BLOOD_POOL_ID = 3
 RV_MYOCARDIUM_ID = 4
 MYOCARDIUM_DENSITY = 1.05
-ASSUMED_HEART_RATE = 70
+# A coverage factor above 1.5 means that fewer than two thirds of the acquired
+# SAX locations contain an LV label. Cap the extrapolation and expose a QC flag
+# instead of allowing a single incomplete/failed stack to be amplified without
+# bound during hospital inference.
+MAX_LV_COVERAGE_FACTOR = 1.5
 
-MAX_SLICES_PER_BLOCK = 8
-SKIP_HEAD_SLICES_PER_BLOCK = 1
-SKIP_TAIL_SLICES_PER_BLOCK = 2
+# Retained only for compatibility with older imports. SAX volumetry uses the
+# complete phase-specific spatial stack; empty/non-LV slices are excluded later
+# through the label-based valid-slice mask rather than fixed positional trimming.
+MAX_SLICES_PER_BLOCK = None
+SKIP_HEAD_SLICES_PER_BLOCK = 0
+SKIP_TAIL_SLICES_PER_BLOCK = 0
 TARGET_SLICE_INDEX = 3
 
 SEGMENTATION_DIVISIONS = {'apex': 4, 'mid': 6, 'base': 6}
@@ -769,6 +776,16 @@ def create_3d_blocks(data, num_blocks):
         logging.warning(f"    Slices per block is 0，cannot split into blocks")
         return None, None
 
+    skipped_slices = SKIP_HEAD_SLICES_PER_BLOCK + SKIP_TAIL_SLICES_PER_BLOCK
+    if slices_per_block <= skipped_slices:
+        logging.warning(
+            f"    Each phase has only {slices_per_block} spatial slices, but "
+            f"head={SKIP_HEAD_SLICES_PER_BLOCK} and "
+            f"tail={SKIP_TAIL_SLICES_PER_BLOCK} slices were requested for exclusion; "
+            "cannot create a consistent measurement stack"
+        )
+        return None, None
+
     logging.info(f"    Total slices: {total_slices}, split into {num_blocks} blocks, each block {slices_per_block} slices")
 
     blocks = []
@@ -785,15 +802,33 @@ def create_3d_blocks(data, num_blocks):
             logging.warning(f"    blocks {block_idx} has no valid slices, skipped")
             continue
 
-        original_block_data = data[:, :, slice_indices]
-        original_blocks.append(original_block_data)
+        # Preserve the complete spatial stack for every cardiac phase. Empty or
+        # anatomically invalid blood-pool slices are filtered by the label-based
+        # valid-z masks during ED/ES selection and EDV/ESV integration.
+        end_position = (
+            len(slice_indices) - SKIP_TAIL_SLICES_PER_BLOCK
+            if SKIP_TAIL_SLICES_PER_BLOCK > 0
+            else len(slice_indices)
+        )
+        effective_slice_indices = slice_indices[
+            SKIP_HEAD_SLICES_PER_BLOCK:end_position
+        ]
+        if not effective_slice_indices:
+            logging.warning(
+                f"    block {block_idx} has no slices after configured slice selection"
+            )
+            return None, None
 
-        blocks.append(original_block_data)
+        effective_block_data = data[:, :, effective_slice_indices]
+        blocks.append(effective_block_data)
+        # Downstream volume, mass, dimension, and wall-thickness calculations
+        # must use the identical effective stack used for phase selection.
+        original_blocks.append(effective_block_data)
 
         logging.info(
-            f"      block {block_idx}: slice_indices={slice_indices[:5]}"
-            f"{'...' if len(slice_indices) > 5 else ''}, "
-            f"shape={original_block_data.shape}"
+            f"      block {block_idx}: original_slice_indices={slice_indices}, "
+            f"effective_slice_indices={effective_slice_indices}, "
+            f"shape={effective_block_data.shape}"
         )
 
     logging.info(f"    Successfully created {len(blocks)}  blocks (including  {len([b for b in blocks if b is not None])} valid blocks)")
@@ -1410,7 +1445,29 @@ def process_block(blk, img_blk=None, block_type=""):
         'scale_factors': scale_factors
     }
 
-def calculate_cine_sa_metrics(cine_sa_mask_path, slice_num, qc_save_dir=None):
+def _calculate_cardiac_output(stroke_volume_ml, heart_rate_bpm):
+    """Calculate CO (L/min) from SV (mL) and a patient-specific HR (bpm)."""
+    if heart_rate_bpm is None or not np.isfinite(heart_rate_bpm):
+        return None
+    return float(stroke_volume_ml) * float(heart_rate_bpm) / 1000.0
+
+
+def _smallest_mode_positive(values):
+    """Return a deterministic mode after excluding zero/invalid counts."""
+    values = np.asarray(values, dtype=int)
+    values = values[values > 0]
+    if values.size == 0:
+        return 0
+    unique, counts = np.unique(values, return_counts=True)
+    return int(unique[np.argmax(counts)])
+
+
+def calculate_cine_sa_metrics(
+    cine_sa_mask_path,
+    slice_num,
+    heart_rate=None,
+    qc_save_dir=None,
+):
 
     try:
 
@@ -1421,7 +1478,28 @@ def calculate_cine_sa_metrics(cine_sa_mask_path, slice_num, qc_save_dir=None):
         original_spacing = pred_img.header.get_zooms()
         logging.info(f"Original image spacing(zz compressed by phase): {original_spacing}")
 
-        BLOCK_SIZES = slice_num
+        requested_phase_count = int(slice_num)
+        BLOCK_SIZES = requested_phase_count
+        phase_count_corrected = False
+        if pred_data.shape[2] % BLOCK_SIZES != 0:
+            divisible_candidates = [
+                candidate for candidate in (25, 30)
+                if pred_data.shape[2] % candidate == 0
+            ]
+            if len(divisible_candidates) != 1:
+                logging.warning(
+                    f"SAX z-size {pred_data.shape[2]} is incompatible with requested "
+                    f"phase count {requested_phase_count}, and no unique 25/30-phase "
+                    "interpretation is available"
+                )
+                return None
+            BLOCK_SIZES = divisible_candidates[0]
+            phase_count_corrected = True
+            logging.warning(
+                f"Corrected inconsistent SAX phase metadata from "
+                f"{requested_phase_count} to {BLOCK_SIZES} because z-size "
+                f"{pred_data.shape[2]} is divisible only by the latter"
+            )
 
         is_z_compressed = (
             pred_data.shape[2] > BLOCK_SIZES
@@ -1444,6 +1522,7 @@ def calculate_cine_sa_metrics(cine_sa_mask_path, slice_num, qc_save_dir=None):
 
         if blocks is None or original_blocks is None:
             return None
+        lv_phase_measurements = []
         lv_block_volumes = []
         rv_block_volumes = []
         voxel_volume_ml = original_spacing[0] * original_spacing[1] * z_spacing_phys / 1000.0
@@ -1456,8 +1535,8 @@ def calculate_cine_sa_metrics(cine_sa_mask_path, slice_num, qc_save_dir=None):
             lv_valid_z = np.where(has_lv)[0]
             if len(lv_valid_z) > 0:
                 lv_voxels = int(np.sum(block[..., lv_valid_z] == LV_BLOOD_POOL_ID))
-                lv_vol = lv_voxels * voxel_volume_ml
-                lv_block_volumes.append((i, lv_vol, lv_valid_z))
+                lv_raw_vol = lv_voxels * voxel_volume_ml
+                lv_phase_measurements.append((i, lv_raw_vol, lv_valid_z))
 
             has_rv = np.any(block == RV_BLOOD_POOL_ID, axis=(0, 1))
             rv_valid_z = np.where(has_rv)[0]
@@ -1466,9 +1545,44 @@ def calculate_cine_sa_metrics(cine_sa_mask_path, slice_num, qc_save_dir=None):
                 rv_vol = rv_voxels * voxel_volume_ml
                 rv_block_volumes.append((i, rv_vol, rv_valid_z))
 
-        if not lv_block_volumes:
+        if not lv_phase_measurements:
             logging.warning("All blocks have no LV blood pool; cannot compute LV metrics")
             return None
+
+        # Stabilize ED/ES selection against isolated missing/extra segmented
+        # slices. Only phases with the modal number of LV-positive spatial
+        # slices are compared. The mean segmented cross-sectional area is then
+        # integrated over the complete acquired stack extent. This preserves
+        # all acquired spatial slices (no fixed head/tail deletion), avoids a
+        # patient-specific report-derived correction, and uses the same factor
+        # for EDV and ESV so that LVEF is unchanged by the normalization.
+        lv_valid_slice_mode = _smallest_mode_positive(
+            [len(item[2]) for item in lv_phase_measurements]
+        )
+        lv_total_spatial_slices = int(original_blocks[0].shape[2])
+        lv_coverage_factor_uncapped = (
+            float(lv_total_spatial_slices) / float(lv_valid_slice_mode)
+            if lv_valid_slice_mode > 0
+            else 1.0
+        )
+        lv_coverage_factor = min(
+            lv_coverage_factor_uncapped,
+            MAX_LV_COVERAGE_FACTOR,
+        )
+        lv_raw_volume_by_phase = {}
+        for phase_idx, raw_volume, valid_z in lv_phase_measurements:
+            lv_raw_volume_by_phase[phase_idx] = raw_volume
+            if len(valid_z) != lv_valid_slice_mode:
+                continue
+            lv_block_volumes.append(
+                (phase_idx, raw_volume * lv_coverage_factor, valid_z)
+            )
+
+        # Defensive fallback for a malformed stack. In normal data the modal
+        # group is always non-empty.
+        if not lv_block_volumes:
+            lv_coverage_factor = 1.0
+            lv_block_volumes = list(lv_phase_measurements)
 
         lv_block_volumes.sort(key=lambda x: x[1], reverse=True)
         lv_ed_idx, lv_edv_raw, lv_ed_z = lv_block_volumes[0]
@@ -1524,18 +1638,43 @@ def calculate_cine_sa_metrics(cine_sa_mask_path, slice_num, qc_save_dir=None):
             es_rv_voxels = 0
 
         voxel_volume_ml_mass = voxel_volume_ml
-        metrics['LV_EDV'] = ed_lv_voxels * voxel_volume_ml
-        metrics['LV_ESV'] = es_lv_voxels * voxel_volume_ml
+        metrics['LV_EDV'] = float(lv_edv_raw)
+        metrics['LV_ESV'] = float(lv_esv_raw)
         metrics['LV_SV'] = metrics['LV_EDV'] - metrics['LV_ESV']
         metrics['LV_EF'] = (metrics['LV_SV'] / metrics['LV_EDV'] * 100) if metrics['LV_EDV'] > 0 else 0
-        metrics['LV_CO'] = metrics['LV_SV'] * ASSUMED_HEART_RATE / 1000.0
+        metrics['LV_CO'] = _calculate_cardiac_output(metrics['LV_SV'], heart_rate)
         metrics['LV_Mass'] = ed_lv_myo_voxels * voxel_volume_ml_mass * MYOCARDIUM_DENSITY
+        metrics['LV_Volume_QC'] = {
+            'method': 'modal-valid-slice stack-coverage normalization',
+            'phase_count_requested': requested_phase_count,
+            'phase_count_used': int(BLOCK_SIZES),
+            'phase_count_corrected': phase_count_corrected,
+            'total_spatial_slices': lv_total_spatial_slices,
+            'modal_lv_positive_slices': lv_valid_slice_mode,
+            'coverage_factor': lv_coverage_factor,
+            'coverage_factor_uncapped': lv_coverage_factor_uncapped,
+            'coverage_factor_capped': bool(
+                lv_coverage_factor_uncapped > MAX_LV_COVERAGE_FACTOR
+            ),
+            'manual_review_recommended': bool(
+                lv_coverage_factor_uncapped > MAX_LV_COVERAGE_FACTOR
+            ),
+            'ed_phase_index': int(lv_ed_idx),
+            'es_phase_index': int(lv_es_idx),
+            'ed_raw_geometric_volume_ml': float(lv_raw_volume_by_phase.get(lv_ed_idx, np.nan)),
+            'es_raw_geometric_volume_ml': float(lv_raw_volume_by_phase.get(lv_es_idx, np.nan)),
+        }
 
         metrics['RV_EDV'] = ed_rv_voxels * voxel_volume_ml
         metrics['RV_ESV'] = es_rv_voxels * voxel_volume_ml
         metrics['RV_SV'] = metrics['RV_EDV'] - metrics['RV_ESV']
         metrics['RV_EF'] = (metrics['RV_SV'] / metrics['RV_EDV'] * 100) if metrics['RV_EDV'] > 0 else 0
-        metrics['RV_CO'] = metrics['RV_SV'] * ASSUMED_HEART_RATE / 1000.0
+        metrics['RV_CO'] = _calculate_cardiac_output(metrics['RV_SV'], heart_rate)
+        metrics['HeartRate'] = (
+            float(heart_rate)
+            if heart_rate is not None and np.isfinite(heart_rate)
+            else None
+        )
 
         print(
             f"[Result] LV_EDV={metrics['LV_EDV']:.1f} LV_ESV={metrics['LV_ESV']:.1f} "

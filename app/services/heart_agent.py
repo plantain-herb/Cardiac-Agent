@@ -13,6 +13,7 @@ from app.config import (
     FULL_MODALITY_TO_SHORT,
     LV_WALL_SEGMENTS,
     MODALITY_FULL_ORDER,
+    RUNTIME_PROFILE,
     RV_WALL_SEGMENTS,
     SEQ_TEMPLATE_PATTERNS,
     SEQ_TOKEN_NORMALIZE,
@@ -249,14 +250,15 @@ class HeartMRIAgent:
                 wall_items.append({
                     "key": f"{prefix}_{num:02d}_mean", "name": en_name,
                     "value": round(mean_v, 2), "unit": "mm",
-                    "normal_range": "6-12", "status": "normal",
+                    "normal_range": "6-12",
+                    "status": self._get_metric_status(f"{prefix}_{num:02d}_mean", mean_v),
                 })
         apex_v = metrics.get("LV_TP_17_mean")
         if apex_v is not None:
             wall_items.append({
                 "key": "LV_TP_17_mean", "name": "Apex (4CH)",
                 "value": round(apex_v, 2), "unit": "mm",
-                "normal_range": "", "status": "normal",
+                "normal_range": "", "status": "unknown",
             })
         if wall_items:
             report["sections"].append({"name": "LV Wall Thickness (17-Segment)", "items": wall_items})
@@ -269,7 +271,7 @@ class HeartMRIAgent:
                 rv_wall_items.append({
                     "key": key, "name": name,
                     "value": round(val, 2), "unit": "mm",
-                    "normal_range": "", "status": "normal",
+                    "normal_range": "", "status": "unknown",
                 })
         if rv_wall_items:
             report["sections"].append({"name": "RV Wall Thickness (4CH)", "items": rv_wall_items})
@@ -311,30 +313,66 @@ class HeartMRIAgent:
         return report
     
     def _get_metric_status(self, key: str, value: float) -> str:
-        """判断指标状态"""
+        """Classify a metric against the reference range shown in the UI.
+
+        Values without an explicit reference range must stay unclassified.  A
+        previous implementation returned ``normal`` for every non-EF metric,
+        which made clearly out-of-range measurements look reassuring.
+        """
         if value is None:
+            return "unknown"
+
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
             return "unknown"
         
         # EF 正常范围
         if key == "LV_EF":
-            if value >= 55 and value <= 70:
+            if numeric_value >= 55 and numeric_value <= 70:
                 return "normal"
-            elif value < 40:
+            elif numeric_value < 40:
                 return "severely_reduced"
-            elif value < 55:
+            elif numeric_value < 55:
                 return "mildly_reduced"
             else:
                 return "elevated"
         elif key == "RV_EF":
-            if value >= 40 and value <= 65:
+            if numeric_value >= 40 and numeric_value <= 65:
                 return "normal"
-            elif value < 30:
+            elif numeric_value < 30:
                 return "severely_reduced"
-            elif value < 40:
+            elif numeric_value < 40:
                 return "mildly_reduced"
             else:
                 return "elevated"
-        
+
+        reference_ranges = {
+            "LA_LD": (27.0, 40.0),
+            "RA_LD": (29.0, 45.0),
+            "LV_LD": (42.0, 58.0),
+            "RV_LD": (35.0, 45.0),
+            "LV_EDV": (56.0, 155.0),
+            "LV_ESV": (19.0, 58.0),
+            "LV_SV": (55.0, 100.0),
+            "LV_CO": (4.0, 8.0),
+            "LV_Mass": (85.0, 190.0),
+            "RV_EDV": (88.0, 227.0),
+            "RV_ESV": (35.0, 100.0),
+            "RV_SV": (55.0, 100.0),
+            "RV_CO": (4.0, 8.0),
+        }
+        if re.fullmatch(r"LV_(?:BS|IP|SP)_\d{2}_mean", key):
+            reference_ranges[key] = (6.0, 12.0)
+
+        bounds = reference_ranges.get(key)
+        if bounds is None:
+            return "unknown"
+        lower, upper = bounds
+        if numeric_value < lower:
+            return "low"
+        if numeric_value > upper:
+            return "high"
         return "normal"
 
     def register_metric_correction_workflow(
@@ -1179,6 +1217,31 @@ class HeartMRIAgent:
             )
             report_kwargs["slice_num_4ch"] = report_slice_num_4ch
             report_kwargs["slice_num_sa"] = report_slice_num_sa
+
+            # The compact fast MRG validates and consumes NIfTI files directly,
+            # whereas the legacy orchestrator accepted extracted DICOM folders.
+            # Keep conversion inside the session cache so the challenger's
+            # allowed-root boundary remains fail closed.
+            if RUNTIME_PROFILE == "fast":
+                nifti_output_dir = (
+                    os.path.join(CACHE_RESULTS_DIR, session_id, "nifti")
+                    if session_id
+                    else tempfile.mkdtemp()
+                )
+
+                def as_nifti(path, modality):
+                    if not path or path.endswith((".nii", ".nii.gz")):
+                        return path
+                    return convert_dcm_to_nifti(
+                        path,
+                        nifti_output_dir,
+                        f"fast_mrg_{modality}",
+                    )
+
+                image_4ch = as_nifti(image_4ch, "4ch")
+                image_sa = as_nifti(image_sa, "sax")
+                image_2ch = as_nifti(image_2ch, "2ch")
+                image_lge = as_nifti(image_lge, "lge")
 
             expert_result = self.expert_client.call_mrg(
                 worker_name, image_4ch, image_sa,

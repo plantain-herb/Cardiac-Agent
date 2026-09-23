@@ -12,6 +12,8 @@ from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 from typing import Tuple, Optional, Dict, Any
 
+from atrial_measurement_v16 import measure_atrial_ap_diameters
+
 CROP_MARGIN = 5
 
 BACKGROUND_ID = 0
@@ -30,7 +32,6 @@ TARGET_SLICE_INDEX = 1
 RV_WALL_THICKNESS_DIVISIONS = 3
 APEX_SLICE_INDEX = 1
 
-ASSUMED_HEART_RATE = 70
 MYOCARDIUM_DENSITY = 1.05
 
 class Line2D:
@@ -2125,15 +2126,25 @@ def calculate_cine_4ch_metrics(cine_4ch_mask_path, slice_num):
 
         result = {}
 
-        if ed_block_original_la is not None and ed_block_original_la.shape[2] > TARGET_SLICE_INDEX:
-
-            ed_target_slice = ed_block_original_la[:, :, TARGET_SLICE_INDEX]
-
-            atrial_results = analyze_cardiac_chambers_with_visualization(
-                ed_target_slice, original_spacing[:2]
-            )
-            result['LA_ED_Long_Diameter'] = atrial_results['left_atrium']['parallel2_diameter_mm'] if atrial_results['left_atrium']['parallel2_diameter_mm'] > 0 else None
-            result['RA_ED_Long_Diameter'] = atrial_results['right_atrium']['parallel2_diameter_mm'] if atrial_results['right_atrium']['parallel2_diameter_mm'] > 0 else None
+        atrial_results_v16 = measure_atrial_ap_diameters(
+            cine_4ch_mask_path, int(slice_num)
+        )
+        result['LA_AP_Diameter'] = atrial_results_v16['LA_AP_Diameter_mm']
+        result['RA_AP_Diameter'] = atrial_results_v16['RA_AP_Diameter_mm']
+        # Backward-compatible aliases for existing downstream consumers.
+        result['LA_ED_Long_Diameter'] = atrial_results_v16['LA_AP_Diameter_mm']
+        result['RA_ED_Long_Diameter'] = atrial_results_v16['RA_AP_Diameter_mm']
+        result['Atrial_Diameter_QC'] = {
+            'method': atrial_results_v16['method'],
+            'legacy_alias_note': ('LA_ED_Long_Diameter/RA_ED_Long_Diameter are '
+                                  'compatibility aliases of AP_Diameter in v16'),
+            'LA_selected_phase': atrial_results_v16['LA_selected_phase'],
+            'LA_selected_slice_index': atrial_results_v16['LA_selected_slice_index'],
+            'RA_selected_phase': atrial_results_v16['RA_selected_phase'],
+            'RA_selected_slice_index': atrial_results_v16['RA_selected_slice_index'],
+            'LA': atrial_results_v16['LA_qc'],
+            'RA': atrial_results_v16['RA_qc'],
+        }
 
         if ed_block_original is not None and ed_block_original.shape[2] > TARGET_SLICE_INDEX:
             ed_target_slice = ed_block_original[:, :, TARGET_SLICE_INDEX]

@@ -940,6 +940,37 @@ header {
   border: 1px solid var(--border);
 }
 
+.process-time-card {
+  width: fit-content;
+  margin-top: 10px;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(78, 205, 196, 0.35);
+  border-radius: 8px;
+  background: rgba(78, 205, 196, 0.08);
+}
+
+.process-time-icon {
+  font-size: 13px;
+}
+
+.process-time-label {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.process-time-value {
+  color: var(--primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .report-header {
   background: var(--gradient-2);
   padding: 12px 16px;
@@ -1037,6 +1068,17 @@ header {
 .metric-status.normal {
   background: rgba(46, 213, 115, 0.2);
   color: var(--success);
+}
+
+.metric-status.low,
+.metric-status.high {
+  background: rgba(255, 71, 87, 0.2);
+  color: var(--error);
+}
+
+.metric-status.unknown {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-muted);
 }
 
 .metric-status.mildly_reduced {
@@ -1511,6 +1553,17 @@ header {
 .highlight-card .hl-status.normal {
   background: rgba(46, 213, 115, 0.2);
   color: var(--success);
+}
+
+.highlight-card .hl-status.low,
+.highlight-card .hl-status.high {
+  background: rgba(255, 71, 87, 0.2);
+  color: var(--error);
+}
+
+.highlight-card .hl-status.unknown {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-muted);
 }
 
 .highlight-card .hl-status.mildly_reduced {
